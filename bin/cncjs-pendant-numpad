@@ -83,10 +83,13 @@ var store = {
     },
     sender: {
         status: {}
-    }
+    },
+    numlock_at: new Date(),
+    spindle_speed: 0,
 };
 
 var kbdevent = {
+    numlock: 0,
     l_control: 0,
     l_shift: 0,
     l_alt: 0,
@@ -133,6 +136,15 @@ var createServer = function(options) {
             store.sender.status = data;
         });
 
+        socket.on('serialport:read', function(data) {
+            const d = (data || '').trim();
+            const re = /[<|]FS:(\d+),(\d+)[>|]/;
+            const m = d.match(re);
+            if (m) {
+                store.spindle_speed = parseInt(m[2]) || 0;
+            }
+        });
+
         console.log("Keyboard VID:PID is ", options.vendorId, options.productId);
         const findPath = interface =>
             hid
@@ -146,12 +158,12 @@ var createServer = function(options) {
 
         console.log("Keyboard HID Address:", findPath(0));
 
-
         var keyboard_main = new hid.HID(findPath(0));
 
-        keyboard_main.on("data", function(data) {
+        keyboard_main.on("data", function(data,x) {
             var recv = data.toJSON().data;
-            var bits = recv.shift();
+            var bits = recv.shift();  
+            kbdevent.numlock = (new Date() - store.numlock_at)<250;
             kbdevent.l_control = (bits & 1) !== 0;
             kbdevent.l_shift = (bits & 2) !== 0;
             kbdevent.l_alt = (bits & 4) !== 0;
@@ -161,62 +173,148 @@ var createServer = function(options) {
             kbdevent.r_alt = (bits & 64) !== 0;
             kbdevent.r_meta = (bits & 128) !== 0;
             recv.shift();
-            kbdevent.key = recv.shift();
-            sendToController();
+            kbdevent.key = 0;
+            for(var i=0;i<recv.length;i++) {
+                if (recv[i]!=0) {
+                    kbdevent.key = recv.shift();
+                }
+            }
+            if (kbdevent.key!=0) sendToController();
         });
 
 
+        function run_macro(macro_name) {
+            console.log("run macro: "+macro_name)
+            socket.emit('command', options.port, 'macro:run', macro_id);
+        }
+
+        function toggle_spindle() {
+
+        }
 
         function sendToController() {
             // Calculate move size modifiers
-            kbdevent.move = kbdevent.default_move;
+            kbdeventimove = kbdevent.default_move;
 
-            console.log("key: ", kbdevent.key);
+            const numlock = kbdevent.numlock;
+
             switch (kbdevent.key) {
-                case 87: // +
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 Z-" + kbdevent.move + ";\n"
-                    );
+                case 83:  // [1] numlock, only hits in pairs tho, not individual
+                    store.numlock_at = new Date();
                     break;
-                case 86: // -
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 Z" + kbdevent.move + ";\n"
-                    );
+
+                case 84: // [2] key: /
+                    if (!numlock) {
+                        kbdevent.default_move = 0.1;
+                    } else {
+                        socket.emit('command', options.port, 'gcode:stop');
+                    }
                     break;
-                case 92: // arrow: left
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 X-" + kbdevent.move + ";\n"
-                    );
+
+                case 85: // [3] key: *
+                    if (!numlock) {
+                        kbdevent.default_move = 1;
+                    } else {
+                        socket.emit('command', options.port, 'gcode:pause');
+                    }
                     break;
-                case 94: // arrow: right
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 X" + kbdevent.move + ";\n"
-                    );
+
+                case 42: // [4] key: Backspace
+                    if (!numlock) {
+                        kbdevent.default_move = 10;
+                    } else {
+                        socket.emit('command', options.port, 'gcode:start');
+                    }
                     break;
-                case 96: // arrow: up
+
+                case 95: // [5] home
+                    if (!numlock) {
+      
+                        socket.emit(
+                            "write",
+                            options.port,
+                            "G91 X-" + kbdevent.move + " Y" + kbdevent.move + ";\n"
+                        );
+                    } else {
+                    }
+                    break;
+                case 96: // [6] arrow: up
                     socket.emit(
                         "write",
                         options.port,
                         "G91 Y" + kbdevent.move + ";\n"
                     );
                     break;
-                case 90: // arrow: down
+                
+                case 97: // [7] arrow: Page up
                     socket.emit(
                         "write",
                         options.port,
-                        "G91 Y-" + kbdevent.move + ";\n"
+                        "G91 X" + kbdevent.move + " Y" + kbdevent.move + ";\n"
+                    );
+                    break;
+                case 86: // [8] -
+                    if (!numlock) {
+                        socket.emit(
+                            "write",
+                            options.port,
+                            "G91 Z" + kbdevent.move + ";\n"
+                        );
+                    } else {
+                        // toggle spindle!
+                        if (store.spindle_speed==0) {
+                            console.log("Starting spindle");
+                            socket.emit("write",options.port,"M3 S20000;\n");
+                        } else {
+                            console.log("Stopping spindle");
+                            socket.emit("write",options.port,"M5;\n");
+                        }
+                        // console.log("Querying.");
+                        var r = socket.emit("write",options.port,"?");
+                    }
+                    break;
+
+                case 92: // [9] arrow: left
+                    socket.emit(
+                        "write",
+                        options.port,
+                        "G91 X-" + kbdevent.move + ";\n"
                     );
                     break;
 
-                case 89: // arrow: End
+                case 93: // [10] Key: 5
+                    if (!numlock) {
+        
+                        socket.emit("write", options.port, "G90 X0 Y0;\n");
+                    } else { 
+                        socket.emit("write", options.port, "G10 L20 P1 X0 Y0;\n");
+
+                    } 
+                    break;
+
+                case 94: // [11] arrow: right
+                    socket.emit(
+                        "write",
+                        options.port,
+                        "G91 X" + kbdevent.move + ";\n"
+                    );
+                    break;
+
+                case 87: // [12] +
+                    if (!numlock) {
+                        socket.emit(
+                            "write",
+                            options.port,
+                            "G91 Z-" + kbdevent.move + ";\n"
+                        );
+                    } else {
+
+                        socket.emit("write", options.port, "G10 L20 P1 Z0;\n");
+                    }
+                    break;
+           
+                case 89: // [13] arrow: End
+                    socket.emit('command', options.port, 'gcode:start');
                     socket.emit(
                         "write",
                         options.port,
@@ -224,70 +322,49 @@ var createServer = function(options) {
                     );
                     break;
 
-                case 97: // arrow: Page up
+                case 90: // [14] arrow: down
                     socket.emit(
                         "write",
                         options.port,
-                        "G91 X" + kbdevent.move + " Y" + kbdevent.move + ";\n"
+                        "G91 Y-" + kbdevent.move + ";\n"
                     );
                     break;
 
-                case 91: // arrow: Page Down
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 X" + kbdevent.move + " Y-" + kbdevent.move + ";\n"
-                    );
+                case 91: // [15] arrow: Page Down
+                    if (!numlock) {
+                        socket.emit('command', options.port, 'gcode:start');
+                        socket.emit(
+                            "write",
+                            options.port,
+                            "G91 X" + kbdevent.move + " Y-" + kbdevent.move + ";\n"
+                        );
+                    } else {
+                        run_macro("Autolevel 10mm Grid"); 
+                    }
                     break;
 
-                case 95: // arrow: Page Down
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 X-" + kbdevent.move + " Y" + kbdevent.move + ";\n"
-                    );
+                case 88: // [16/20] Key: OK or Enter
+                    socket.emit('command', options.port, 'reset');
                     break;
 
-                case 93: // Key: 5
-                    //socket.emit("write", options.port, "G90;\n");
-                    socket.emit("write", options.port, "G90 X0 Y0;\n");
+                case 98: // [17/18] key: 0/ins
+                    socket.emit('command', options.port, 'unlock');
                     break;
 
-                case 99: // .
-                    socket.emit("write", options.port, "G91;\n");
-                    socket.emit("write", options.port, "G38.2 Z-10 F87\n");
-                    socket.emit("write", options.port, "G10 L20 P1 Z"+options.probeOffset+"\n");
-                    socket.emit("write", options.port, "G91;\n");
-                    socket.emit("write", options.port, "G0 Z4;\n");
-                    socket.emit("write", options.port, "G90;\n");
-                break;
-
-                case 83:
-                    socket.emit("write", options.port, "G10 L20 P1 X0 Y0;\n");
-                break;
-
-
-                case 98:
-                    socket.emit("write", options.port, "$X;\n");
+                case 99: // [19] . z-probe
+                    if (numlock) {
+                        socket.emit("write", options.port, "G91;\n");
+                        socket.emit("write", options.port, "G38.2 Z-10 F87\n");
+                        socket.emit("write", options.port, "G10 L20 P1 Z"+options.probeOffset+"\n");
+                        socket.emit("write", options.port, "G91;\n");
+                        socket.emit("write", options.port, "G0 Z4;\n");
+                        socket.emit("write", options.port, "G90;\n");
+                    } else {
+                    }
                     break;
 
-                case 84: // key: /
-                    kbdevent.default_move = 0.1;
-                    break;
-                case 85: // key: *
-                    kbdevent.default_move = 1;
-                    break;
-                case 42: // key: Backspace
-                    kbdevent.default_move = 10;
-                    break;
-
-                case 88: // Key: OK or Enter
-                    socket.emit("write", options.port, "$H;\n");
-                default:
-                    break;
             }
 
-	    //console.log(kbdevent);
         }
     });
 };
@@ -296,6 +373,7 @@ var createServer = function(options) {
 // console.log('devices:', hid.devices());
 
 if (options.port) {
+    console.log("calling createServer",options);
     createServer(options);
     return;
 }
@@ -325,3 +403,4 @@ serialport.list().then((ports) => {
         process.exit(1);
     }
 });
+
