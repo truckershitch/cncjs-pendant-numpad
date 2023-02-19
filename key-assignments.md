@@ -15,7 +15,7 @@ Here are the current coded key assigments.  This is primary documentation for my
   - layer swap.  lights green LED (Numlock), enables second/lower/green function on some keys.  keys without green functions function on both layers.  this first button does nothing on its own (cannot!), it simply toggles numlock... errr... "the green layer"
 - 02:
   - set movement to 0.1mm
-  - green: stop running GCodes
+  - green: stop running GCode
 - 03:
   - set movement to 1.0mm
   - green: pause or resume GCode, depending on current state
