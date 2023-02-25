@@ -133,6 +133,7 @@ var createServer = function(options) {
 
         // Sender
         socket.on("sender:status", function(data) {
+            console.log("sender:status",data);
             store.sender.status = data;
         });
 
@@ -140,6 +141,7 @@ var createServer = function(options) {
             const d = (data || '').trim();
             const re = /[<|]FS:(\d+),(\d+)[>|]/;
             const m = d.match(re);
+            console.log("serialport:read",d);
             if (m) {
                 store.spindle_speed = parseInt(m[2]) || 0;
             }
@@ -185,7 +187,7 @@ var createServer = function(options) {
 
         function run_macro(macro_name) {
             console.log("run macro: "+macro_name)
-            socket.emit('command', options.port, 'macro:run', macro_id);
+            // socket.emit('command', options.port, 'macro:run', macro_id);
         }
 
         function toggle_spindle() {
@@ -194,9 +196,10 @@ var createServer = function(options) {
 
         function sendToController() {
             // Calculate move size modifiers
-            kbdeventimove = kbdevent.default_move;
-
+            kbdevent.move = kbdevent.default_move;
+            
             const numlock = kbdevent.numlock;
+            console.log("!!!!! key:"+kbdevent.key+" numlock:"+numlock);
 
             switch (kbdevent.key) {
                 case 83:  // [1] numlock, only hits in pairs tho, not individual
@@ -339,7 +342,7 @@ var createServer = function(options) {
                             "G91 X" + kbdevent.move + " Y-" + kbdevent.move + ";\n"
                         );
                     } else {
-                        run_macro("Autolevel 10mm Grid"); 
+                        run_macro("Traipse around the edges"); 
                     }
                     break;
 
@@ -352,7 +355,7 @@ var createServer = function(options) {
                     break;
 
                 case 99: // [19] . z-probe
-                    if (numlock) {
+                    if (!numlock) {
                         socket.emit("write", options.port, "G91;\n");
                         socket.emit("write", options.port, "G38.2 Z-10 F87\n");
                         socket.emit("write", options.port, "G10 L20 P1 Z"+options.probeOffset+"\n");
@@ -360,6 +363,7 @@ var createServer = function(options) {
                         socket.emit("write", options.port, "G0 Z4;\n");
                         socket.emit("write", options.port, "G90;\n");
                     } else {
+                        run_macro("z-probe 10mm grid"); 
                     }
                     break;
 
