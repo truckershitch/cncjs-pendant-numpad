@@ -8,6 +8,8 @@ var inquirer = require("inquirer");
 var pkg = require("../package.json");
 var serverMain = require("../index");
 var hid = require("node-hid");
+const { exec } = require('child_process');
+
 var options = {};
 
 const { gcode_bbox } = require("../gcode_bbox");
@@ -123,7 +125,6 @@ var kbdevent = {
 
 var createServer = function(options) {
     serverMain(options, function(err, socket) {
-console.log("AT SERVERMAiN");
         socket.on("Grbl:state", function(state) {
             store.controller.state = state;
         });
@@ -159,11 +160,13 @@ console.log("AT SERVERMAiN");
 
         socket.on('serialport:read', function(data) {
             const d = (data || '').trim();
+            console.log("serialport:read",d);
             const re = /[<|]FS:(\d+),(\d+)[>|]/;
             const m = d.match(re);
-            console.log("serialport:read",d);
             if (m) {
                 store.spindle_speed = parseInt(m[2]) || 0;
+                console.log("stored spindle speed: "+store.spindle_speed);
+
             }
         });
 
@@ -222,11 +225,36 @@ console.log("AT SERVERMAiN");
             }
         });
 
+        function shutdown() {
+            // night night
+            exec('sudo systemctl shutdown',
+                 (error, stdout, stderr) => {
+                     console.log(stdout);
+                     console.log(stderr);
+                     if (error !== null) {
+                         console.log(`exec error: ${error}`);
+                     }
+                 }
+                );
+        };
+
+        function goto_safe_z() {
+            send_gcode("G0 Z10"); // z-safe
+        };
+
+        function send_gcode(gc,eol=true) {
+            if (eol) gc += ";\n";
+            socket.emit("write", options.port, gc);
+        };
+
+        function send_cmd(cmd) {
+            socket.emit('command', options.port, cmd);
+        };
 
         function run_macro(macro_id) {
             // run:macro args: id, context = {}, callback = noop
             console.log("run macro: "+macro_id)
-            // socket.emit('command', options.port, 'macro:run', macro_id, store.context);
+            socket.emit('command', options.port, 'macro:run', macro_id, store.bbox);
         };
 
         function bbox_loaded() {
@@ -239,14 +267,13 @@ console.log("AT SERVERMAiN");
         function traipse_around_the_edges() {
             if (bbox_loaded()) {
                 const bb = store.bbox;
-                var gcode = [];
-                gcode.push("G90");
-                gcode.push("G0 Z10"); // z-safe
-                gcode.push("G0 X"+bb.xmin+" Y"+bb.ymin);
-                gcode.push("G0 X"+bb.xmax);
-                gcode.push("G0 Y"+bb.ymax);
-                gcode.push("G0 X"+bb.xmin);
-                gcode.push("G0 X"+bb.xmin+" Y"+bb.ymin);
+                send_gcode("G90");
+                goto_safe_z();
+                send_gcode("G0 X"+bb.xmin+" Y"+bb.ymax);
+                send_gcode("G0 X"+bb.xmax);
+                send_gcode("G0 Y"+bb.ymin);
+                send_gcode("G0 X"+bb.xmin);
+                send_gcode("G0 X"+bb.xmin+" Y"+bb.ymax);
             } else {
                 console.log("No bounding box (gcode) loaded.");
             }
@@ -256,13 +283,14 @@ console.log("AT SERVERMAiN");
             // toggle spindle!
             if (store.spindle_speed==0) {
                 console.log("Starting spindle");
-                socket.emit("write",options.port,"M3 S20000;\n");
+                send_gcode("M3 S20000");
             } else {
                 console.log("Stopping spindle");
-                socket.emit("write",options.port,"M5;\n");
+                send_gcode("M5");
             }
-            // console.log("Querying.");
-            var r = socket.emit("write",options.port,"?");
+            console.log("Querying.");
+            send_gcode("?",false);
+            //socket.emit("write",options.port,"?");
 
         }
 
@@ -282,7 +310,13 @@ console.log("AT SERVERMAiN");
                     if (!numlock) {
                         kbdevent.default_move = 0.1;
                     } else {
-                        socket.emit('command', options.port, 'gcode:stop');
+                        send_cmd('gcode:stop');
+
+                        send_cmd('reset');
+                        setTimeout( function() {
+                            send_cmd('unlock');
+                            setTimeout( goto_safe_z, 500);
+                        }, 1500 );
                     }
                     break;
 
@@ -290,7 +324,7 @@ console.log("AT SERVERMAiN");
                     if (!numlock) {
                         kbdevent.default_move = 1;
                     } else {
-                        socket.emit('command', options.port, 'gcode:pause');
+                        send_cmd('gcode:pause');
                     }
                     break;
 
@@ -298,112 +332,70 @@ console.log("AT SERVERMAiN");
                     if (!numlock) {
                         kbdevent.default_move = 10;
                     } else {
-                        socket.emit('command', options.port, 'gcode:start');
+                        send_cmd('gcode:start');
                     }
                     break;
 
                 case 95: // [5] home
                     if (!numlock) {
-
-                        socket.emit(
-                            "write",
-                            options.port,
-                            "G91 X-" + kbdevent.move + " Y" + kbdevent.move + ";\n"
-                        );
+                        send_gcode("G91 X-" + kbdevent.move + " Y" + kbdevent.move);
                     } else {
                     }
                     break;
                 case 96: // [6] arrow: up
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 Y" + kbdevent.move + ";\n"
-                    );
+                    send_gcode("G91 Y" + kbdevent.move + ";\n");
                     break;
 
                 case 97: // [7] arrow: Page up
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 X" + kbdevent.move + " Y" + kbdevent.move + ";\n"
-                    );
+                    send_gcode("G91 X" + kbdevent.move + " Y" + kbdevent.move);
                     break;
                 case 86: // [8] -
                     if (!numlock) {
-                        socket.emit(
-                            "write",
-                            options.port,
-                            "G91 Z" + kbdevent.move + ";\n"
-                        );
+                        send_gcode("G91 Z" + kbdevent.move);
                     } else {
                         toggle_spindle();
                     }
                     break;
 
                 case 92: // [9] arrow: left
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 X-" + kbdevent.move + ";\n"
-                    );
+                    send_gcode("G91 X-" + kbdevent.move);
                     break;
 
                 case 93: // [10] Key: 5
                     if (!numlock) {
 
-                        socket.emit("write", options.port, "G90 X0 Y0;\n");
+                        send_gcode("G90 X0 Y0");
                     } else {
-                        socket.emit("write", options.port, "G10 L20 P1 X0 Y0;\n");
+                        send_gcode("G10 L20 P1 X0 Y0");
 
                     }
                     break;
 
                 case 94: // [11] arrow: right
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 X" + kbdevent.move + ";\n"
-                    );
+                    send_gcode("G91 X" + kbdevent.move);
                     break;
 
                 case 87: // [12] +
                     if (!numlock) {
-                        socket.emit(
-                            "write",
-                            options.port,
-                            "G91 Z-" + kbdevent.move + ";\n"
-                        );
+                        send_gcode("G91 Z-" + kbdevent.move);
                     } else {
-
-                        socket.emit("write", options.port, "G10 L20 P1 Z0;\n");
+                        send_gcode("G10 L20 P1 Z0");
                     }
                     break;
 
                 case 89: // [13] arrow: End
-                    socket.emit('command', options.port, 'gcode:start');
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 X-" + kbdevent.move + " Y-" + kbdevent.move + ";\n"
-                    );
+                    send_gcode("G91 X-" + kbdevent.move + " Y-" + kbdevent.move);
                     break;
 
+
+
                 case 90: // [14] arrow: down
-                    socket.emit(
-                        "write",
-                        options.port,
-                        "G91 Y-" + kbdevent.move + ";\n"
-                    );
+                    send_gcode("G91 Y-" + kbdevent.move + ";\n");
                     break;
 
                 case 91: // [15] arrow: Page Down
                     if (!numlock) {
-                        socket.emit('command', options.port, 'gcode:start');
-                        socket.emit(
-                            "write",
-                            options.port,
-                            "G91 X" + kbdevent.move + " Y-" + kbdevent.move + ";\n"
-                        );
+                        send_gcode("G91 X" + kbdevent.move + " Y-" + kbdevent.move);
                     } else {
                         traipse_around_the_edges();
                     }
@@ -411,28 +403,28 @@ console.log("AT SERVERMAiN");
 
                 case 88: // [16/20] Key: OK or Enter
                     if (store.key_repeats>=4) {
-                        socket.emit("shutdown");
                         console.log("********************");
                         console.log("** Shutting down! **");
                         console.log("********************");
+                        shutdown();
                     }
-                    socket.emit('command', options.port, 'reset');
+                    send_cmd('reset');
                     break;
 
                 case 98: // [17/18] key: 0/ins
-                    socket.emit('command', options.port, 'unlock');
+                    send_cmd('unlock');
                     break;
 
                 case 99: // [19] . z-probe
                     if (!numlock) {
-                        socket.emit("write", options.port, "G91;\n");
-                        socket.emit("write", options.port, "G38.2 Z-10 F87\n");
-                        socket.emit("write", options.port, "G10 L20 P1 Z"+options.probeOffset+"\n");
-                        socket.emit("write", options.port, "G91;\n");
-                        socket.emit("write", options.port, "G0 Z4;\n");
-                        socket.emit("write", options.port, "G90;\n");
+                        send_gcode("G91");
+                        send_gcode("G38.2 Z-10 F87");
+                        send_gcode("G10 L20 P1 Z"+options.probeOffset);
+                        send_gcode("G91");
+                        send_gcode("G0 Z4");
+                        send_gcode("G90");
                     } else {
-                        run_macro("z-probe 10mm grid");
+                        run_macro("3a31356e-844c-4aab-bcca-ef28321f77c2");
                     }
                     break;
 

@@ -2,7 +2,7 @@
 
 const Toolpath = require("gcode-toolpath");
 
-bbox = { min: { x:0, y:0 }, max: { x:0, y:0 } };
+bbox = { xmin: 0, xmax: 0, ymin: 0, ymax: 0 };
 
 // from https://github.com/cncjs/cncjs-shopfloor-tablet
 var bboxHandlers = {
@@ -10,10 +10,10 @@ var bboxHandlers = {
         // Update units in case it changed in a previous line
         units = modal.units;
 
-        bbox.min.x = Math.min(bbox.min.x, start.x, end.x);
-        bbox.min.y = Math.min(bbox.min.y, start.y, end.y);
-        bbox.max.x = Math.max(bbox.max.x, start.x, end.x);
-        bbox.max.y = Math.max(bbox.max.y, start.y, end.y);
+        bbox.xmin = Math.min(bbox.xmin, start.x, end.x);
+        bbox.ymin = Math.min(bbox.ymin, start.y, end.y);
+        bbox.xmax = Math.max(bbox.xmax, start.x, end.x);
+        bbox.ymax = Math.max(bbox.ymax, start.y, end.y);
 
     },
   addArcCurve: function(modal, start, end, center) {
@@ -124,10 +124,10 @@ var bboxHandlers = {
         var minX = mx ? center.x - radius : Math.min(start.x, end.x);
         var minY = my ? center.y - radius : Math.min(start.y, end.y);
 
-        bbox.min.x = Math.min(bbox.min.x, minX);
-        bbox.min.y = Math.min(bbox.min.y, minY);
-        bbox.max.x = Math.max(bbox.max.x, maxX);
-        bbox.max.y = Math.max(bbox.max.y, maxY);
+        bbox.xmin = Math.min(bbox.xmin, minX);
+        bbox.ymin = Math.min(bbox.ymin, minY);
+        bbox.xmax = Math.max(bbox.xmax, maxX);
+        bbox.ymax = Math.max(bbox.ymax, maxY);
 
     }
 };
