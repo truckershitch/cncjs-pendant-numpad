@@ -10,6 +10,8 @@ var serverMain = require("../index");
 var hid = require("node-hid");
 var options = {};
 
+const { gcode_bbox } = require("../gcode_bbox");
+
 program
     .version(pkg.version)
     .usage("-s <secret> -p <port> [options]")
@@ -86,6 +88,20 @@ var store = {
     },
     numlock_at: new Date(),
     spindle_speed: 0,
+    gcode: null,
+    gcode_name: null,
+    context: null,
+    last_key_at: new Date(),
+    last_key: null,
+    key_repeats: 0,
+    bbox: {
+        xmin: 0,
+        xmax: 0,
+        ymin: 0,
+        ymax: 0
+    }
+
+
 };
 
 var kbdevent = {
@@ -107,7 +123,7 @@ var kbdevent = {
 
 var createServer = function(options) {
     serverMain(options, function(err, socket) {
-        // Grbl
+console.log("AT SERVERMAiN");
         socket.on("Grbl:state", function(state) {
             store.controller.state = state;
         });
@@ -137,6 +153,10 @@ var createServer = function(options) {
             store.sender.status = data;
         });
 
+        socket.on('serialport:write', function (data, context) {
+            store.context = context;
+        });
+
         socket.on('serialport:read', function(data) {
             const d = (data || '').trim();
             const re = /[<|]FS:(\d+),(\d+)[>|]/;
@@ -147,7 +167,19 @@ var createServer = function(options) {
             }
         });
 
-        console.log("Keyboard VID:PID is ", options.vendorId, options.productId);
+        socket.on('gcode:load', (file, gc) => {
+            store.gcode_filename = file;
+            store.gcode = gc;
+            store.bbox = gcode_bbox(gc);
+            console.log('gcode loaded, bbox ',store.bbox);
+        });
+
+        socket.on('gcode:unload', () => {
+            store.gcode_filename = '';
+            store.gcode = '';
+            console.log('gcode unloaded')
+        });
+
         const findPath = interface =>
             hid
                 .devices()
@@ -162,9 +194,9 @@ var createServer = function(options) {
 
         var keyboard_main = new hid.HID(findPath(0));
 
-        keyboard_main.on("data", function(data,x) {
+        keyboard_main.on("data", function(data) {
             var recv = data.toJSON().data;
-            var bits = recv.shift();  
+            var bits = recv.shift();
             kbdevent.numlock = (new Date() - store.numlock_at)<250;
             kbdevent.l_control = (bits & 1) !== 0;
             kbdevent.l_shift = (bits & 2) !== 0;
@@ -181,23 +213,63 @@ var createServer = function(options) {
                     kbdevent.key = recv.shift();
                 }
             }
-            if (kbdevent.key!=0) sendToController();
+            if (kbdevent.key!=0) {
+                if ((store.last_key==kbdevent.key)&&((new Date()) - store.last_key_at<1000)) store.key_repeats++;
+                else store.key_repeats = 0;
+                store.last_key_at = new Date();
+                store.last_key = kbdevent.key;
+                sendToController();
+            }
         });
 
 
-        function run_macro(macro_name) {
-            console.log("run macro: "+macro_name)
-            // socket.emit('command', options.port, 'macro:run', macro_id);
+        function run_macro(macro_id) {
+            // run:macro args: id, context = {}, callback = noop
+            console.log("run macro: "+macro_id)
+            // socket.emit('command', options.port, 'macro:run', macro_id, store.context);
+        };
+
+        function bbox_loaded() {
+          var r = false;
+          const bb = store.bbox;
+          if ((bb.xmax-bb.xmin)>0) r = true;
+          return r;
+        };
+
+        function traipse_around_the_edges() {
+            if (bbox_loaded()) {
+                const bb = store.bbox;
+                var gcode = [];
+                gcode.push("G90");
+                gcode.push("G0 Z10"); // z-safe
+                gcode.push("G0 X"+bb.xmin+" Y"+bb.ymin);
+                gcode.push("G0 X"+bb.xmax);
+                gcode.push("G0 Y"+bb.ymax);
+                gcode.push("G0 X"+bb.xmin);
+                gcode.push("G0 X"+bb.xmin+" Y"+bb.ymin);
+            } else {
+                console.log("No bounding box (gcode) loaded.");
+            }
         }
 
         function toggle_spindle() {
+            // toggle spindle!
+            if (store.spindle_speed==0) {
+                console.log("Starting spindle");
+                socket.emit("write",options.port,"M3 S20000;\n");
+            } else {
+                console.log("Stopping spindle");
+                socket.emit("write",options.port,"M5;\n");
+            }
+            // console.log("Querying.");
+            var r = socket.emit("write",options.port,"?");
 
         }
 
         function sendToController() {
             // Calculate move size modifiers
             kbdevent.move = kbdevent.default_move;
-            
+
             const numlock = kbdevent.numlock;
             console.log("!!!!! key:"+kbdevent.key+" numlock:"+numlock);
 
@@ -232,7 +304,7 @@ var createServer = function(options) {
 
                 case 95: // [5] home
                     if (!numlock) {
-      
+
                         socket.emit(
                             "write",
                             options.port,
@@ -248,7 +320,7 @@ var createServer = function(options) {
                         "G91 Y" + kbdevent.move + ";\n"
                     );
                     break;
-                
+
                 case 97: // [7] arrow: Page up
                     socket.emit(
                         "write",
@@ -264,16 +336,7 @@ var createServer = function(options) {
                             "G91 Z" + kbdevent.move + ";\n"
                         );
                     } else {
-                        // toggle spindle!
-                        if (store.spindle_speed==0) {
-                            console.log("Starting spindle");
-                            socket.emit("write",options.port,"M3 S20000;\n");
-                        } else {
-                            console.log("Stopping spindle");
-                            socket.emit("write",options.port,"M5;\n");
-                        }
-                        // console.log("Querying.");
-                        var r = socket.emit("write",options.port,"?");
+                        toggle_spindle();
                     }
                     break;
 
@@ -287,12 +350,12 @@ var createServer = function(options) {
 
                 case 93: // [10] Key: 5
                     if (!numlock) {
-        
+
                         socket.emit("write", options.port, "G90 X0 Y0;\n");
-                    } else { 
+                    } else {
                         socket.emit("write", options.port, "G10 L20 P1 X0 Y0;\n");
 
-                    } 
+                    }
                     break;
 
                 case 94: // [11] arrow: right
@@ -315,7 +378,7 @@ var createServer = function(options) {
                         socket.emit("write", options.port, "G10 L20 P1 Z0;\n");
                     }
                     break;
-           
+
                 case 89: // [13] arrow: End
                     socket.emit('command', options.port, 'gcode:start');
                     socket.emit(
@@ -342,11 +405,17 @@ var createServer = function(options) {
                             "G91 X" + kbdevent.move + " Y-" + kbdevent.move + ";\n"
                         );
                     } else {
-                        run_macro("Traipse around the edges"); 
+                        traipse_around_the_edges();
                     }
                     break;
 
                 case 88: // [16/20] Key: OK or Enter
+                    if (store.key_repeats>=4) {
+                        socket.emit("shutdown");
+                        console.log("********************");
+                        console.log("** Shutting down! **");
+                        console.log("********************");
+                    }
                     socket.emit('command', options.port, 'reset');
                     break;
 
@@ -363,7 +432,7 @@ var createServer = function(options) {
                         socket.emit("write", options.port, "G0 Z4;\n");
                         socket.emit("write", options.port, "G90;\n");
                     } else {
-                        run_macro("z-probe 10mm grid"); 
+                        run_macro("z-probe 10mm grid");
                     }
                     break;
 
@@ -377,7 +446,6 @@ var createServer = function(options) {
 // console.log('devices:', hid.devices());
 
 if (options.port) {
-    console.log("calling createServer",options);
     createServer(options);
     return;
 }
@@ -407,4 +475,3 @@ serialport.list().then((ports) => {
         process.exit(1);
     }
 });
-

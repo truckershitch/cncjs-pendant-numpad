@@ -84,9 +84,8 @@ module.exports = function(options, callback) {
 
     socket.on('serialport:open', function(options) {
         options = options || {};
-
         console.log('Connected to port "' + options.port + '" (Baud rate: ' + options.baudrate + ')');
-
+        socket.emit('command', options.port, 'gcode', '(PENDANT: connected)');
         callback(null, socket);
     });
 
