@@ -89,7 +89,6 @@ var store = {
         status: {}
     },
     numlock_at: new Date(),
-    spindle_speed: 0,
     gcode: null,
     gcode_name: null,
     context: null,
@@ -101,10 +100,9 @@ var store = {
         xmax: 0,
         ymin: 0,
         ymax: 0
-    }
-
-
+    },
 };
+
 
 var kbdevent = {
     numlock: 0,
@@ -159,15 +157,23 @@ var createServer = function(options) {
         });
 
         socket.on('serialport:read', function(data) {
+/*
             const d = (data || '').trim();
             console.log("serialport:read",d);
-            const re = /[<|]FS:(\d+),(\d+)[>|]/;
-            const m = d.match(re);
+            var m = d.match(/[<|]FS:(\d+),(\d+)[>|]/);
             if (m) {
                 store.spindle_speed = parseInt(m[2]) || 0;
                 console.log("stored spindle speed: "+store.spindle_speed);
-
             }
+
+            m = d.match(/MPos:([\-\d\.]+),([\-\d\.]+),([\-\d\.]+)/);
+            if (m) {
+                store.mposx = m[1];
+                store.mposy = m[2];
+                store.mposz = m[3];
+            }
+
+*/
         });
 
         socket.on('gcode:load', (file, gc) => {
@@ -227,7 +233,8 @@ var createServer = function(options) {
 
         function shutdown() {
             // night night
-            exec('sudo systemctl shutdown',
+
+            exec('~/shutdown',
                  (error, stdout, stderr) => {
                      console.log(stdout);
                      console.log(stderr);
@@ -236,6 +243,11 @@ var createServer = function(options) {
                      }
                  }
                 );
+        };
+
+        function active_state(t) {
+            console.log("Checking activate.  It is",store.controller.state.status.activeState,"looking for",t);
+            return store.controller.state.status.activeState==t;
         };
 
         function goto_safe_z() {
@@ -252,9 +264,31 @@ var createServer = function(options) {
         };
 
         function run_macro(macro_id) {
+
+            var context = { source: "feeder" } // to fool cncjs-kt-ext into running
+            const bbox = store.bbox;
+            const stat = store.controller.state.status;
+
+            context.xmin = bbox.xmin;
+            context.xmax = bbox.xmax;
+            context.ymin = bbox.ymin;
+            context.ymax = bbox.ymax;
+
+            context.mposx = parseFloat(stat.mpos.x);
+            context.mposy = parseFloat(stat.mpos.y);
+            context.mposz = parseFloat(stat.mpos.z);
+
+            context.posx = parseFloat(stat.wpos.x);
+            context.posy = parseFloat(stat.wpos.y);
+            context.posz = parseFloat(stat.wpos.z);
+
+            console.log("running macro id",macro_id,"with context",context);
+
+
+            // this is just enough context to kep cncjs-kt-ext happy
+
             // run:macro args: id, context = {}, callback = noop
-            console.log("run macro: "+macro_id)
-            socket.emit('command', options.port, 'macro:run', macro_id, store.bbox);
+            socket.emit('command', options.port, 'macro:run', macro_id, context);
         };
 
         function bbox_loaded() {
@@ -281,7 +315,7 @@ var createServer = function(options) {
 
         function toggle_spindle() {
             // toggle spindle!
-            if (store.spindle_speed==0) {
+            if (store.controller.state.status.spindle==0) {
                 console.log("Starting spindle");
                 send_gcode("M3 S20000");
             } else {
@@ -324,7 +358,13 @@ var createServer = function(options) {
                     if (!numlock) {
                         kbdevent.default_move = 1;
                     } else {
-                        send_cmd('gcode:pause');
+                        if (active_state('Run')) {
+                            send_cmd('gcode:pause');
+                        }
+                        if (active_state('Hold')) {
+                            send_cmd('gcode:resume');
+                        }
+
                     }
                     break;
 
@@ -424,6 +464,7 @@ var createServer = function(options) {
                         send_gcode("G0 Z4");
                         send_gcode("G90");
                     } else {
+                        console.log("attempting to run the z-probe grid macro");
                         run_macro("3a31356e-844c-4aab-bcca-ef28321f77c2");
                     }
                     break;
