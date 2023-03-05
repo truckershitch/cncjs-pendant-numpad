@@ -1,118 +1,75 @@
 # cncjs-pendant-numpad
-A simple pendant for using cncjs with a num pad (as Wireless/USB Input). The code is based on [cncjs-pendant-keyboard](https://github.com/cncjs/cncjs-pendant-keyboard)
+A fork of https://github.com/mariolukas/cncjs-pendant-numpad using a Genovation Micropad 631.
 
-![LogiLink Wireless Numpad](docs/logilink_numpad.png)
-
-![LogiLink Wireless Numpad](docs/numpad_labels.png)
-
+![Genovation Numpad](docs/genovation_numpad.jpg) ![Labels](docs/jms_labels.png)
 
 --
 
-NOTICE: Tested with LogiLink num pad  on Linux/Raspbian (Raspberry Pi).
-(default options are set to LogiLink vendor- and productID, see description below for running with other vendors/products)
+Built for a Genovation 631 on a Raspberry Pi 3b+ running Arch ARM.  See parent project for installation and other details.
 
---
-## Installation
+#### Mods for this fork
 
-Make sure you have installed the following packages
+Numlock key functions as a "layer switch".  Also multi-taps can be coded as another "layer."  Currently this is only used for shutting the system down.  Tapping the RESET key 5x within a time window runs ~/shutdown.
 
-```
-libusb-1.0-0-dev
-libudev-dev
-```
-These can be installed with apt-get.
+There is a key to run the cncjs-kt-ext macro.  Running the macro here was a bit of a challenge, per https://github.com/cncjs/cncjs/issues/398 .  There is also a key to trace the outline of the loaded gcode.  Both the macro runner and the outline tracer use code from https://github.com/cncjs/cncjs-shopfloor-tablet .
 
-After cloning the repository to your work directory, change into this directory and run
+The docs folder of this repo has key labels as Freecad sketch, the SVG export of this, and finally a colored PNG.
+
+Here are the current coded key assigments.
 
 ```
-npm install
+[01] [02] [03] [04]
+
+[05] [06] [07] [08]
+
+[09] [10] [11] [12]
+
+[13] [14] [15] [16]
+               [  ]
+[17   18] [19] [20]
 ```
-
-## Add device Rules for non-root users
-
-Some additional configurations are needed for making the device working for non-root users.
-
-First create a new file called 
-
-```
-/etc/udev/rules.d/50-hid.rules
-``` 
-
-add the following line as content, which grants access to the hid device for non-root users.
-
-```
-KERNEL=="hidraw*", GROUP="input", MODE="0660"`
-```
-
-Then run the following command for making the changes work ( a reboot will also do this job).
-
-```
-sudo udevadm trigger
-```
-
-
-## Usage
-Run `bin/cncjs-pendant-numpad` to start. Pass --help to `cncjs-pendant-numpad` for more options.
-
-```
-bin/cncjs-pendant-numpad --help
-```
-
-Hotkeys:
-
-|     Key    	|           Function           	|
-|:----------:	|:----------------------------:	|
-| NUM  LOCK  	| zero out work offset x and y 	|
-| /          	| step in 0.1 units            	|
-| *          	| step in 1.0 units            	|
-| Back Space 	| step in 10.0 units           	|
-| 7 (HOME)   	| move -X and +Y               	|
-| 8 (UP)     	| move +Y                      	|
-| 9 (PG UP)  	| move +X and +Y               	|
-| 4 (LEFT)   	| move -X                      	|
-| 5          	| repeat last action           	|
-| 6 (RIGHT)  	| move +X                      	|
-| 1 (END)    	| move -X and -Y               	|
-| 2 (DOWN)   	| move -Y                      	|
-| 3 (PG DN)  	| move +X and -Y               	|
-| 0 (INS)    	| unlock ($X GRBL)                       	|
-| . (DEL)    	| probe tool offset            	|
-| -          	| z axis up                    	|
-| +          	| z axis down                  	|
-| ENTER      	| home X and Y                 	|
-
-![Numpad Labels](docs/labels.png)
-
-You can download a SVG file for labels [here](docs/key_labels.svg).
-
-### Probe Offset
-The probe offset default is set to 1.56 mm ( i am using a piece of PCB with a thickness of 1.56 mm). You can override this by giving the pendant
-an extra start parameter for probe offset.
-
-```
---probeoffset <value>
-```
-
-### Using with other Num Pad's than LogiLink
-
-Because the keycodes for HID devices are the same for all keyboards, this should also work with 
-other Numpad's than LogiLink. Just find out the vendorID and productID of your device and
-start the pendant with --vendorid and --productid parameter.
-
-Just run the following command to find out the vendor- and productId of your device
-
-```
-lsusb
-```
-The output might look like 
-
-```
-Bus 001 Device 004: ID 062a:4101 MosArt Semiconductor Corp. Wireless Keyboard/Mouse
-```
-
-In this example the vendorID is 0x062a and the productID 0x4101. So you you need
-to start the pendant with the following additional parameters
-
-```
---vendorid 0x062a --productid 0x4101
-```
+- 01:
+  - layer swap.  lights green LED (Numlock), enables second/lower/green function on some keys.  keys without green functions function on both layers.  this first button does nothing on its own (cannot!), it simply toggles numlock... errr... "the green layer"
+- 02:
+  - set movement to 0.1mm
+  - green: stop running GCode
+- 03:
+  - set movement to 1.0mm
+  - green: pause or resume GCode, depending on current state
+- 04:
+  - set movement to 10mm
+  - green: start ("play") loaded GCode
+- 05:
+  - move back and left, X-- Y++
+- 06:
+  - move back, Y++
+- 07:
+  - move back and right, X++ Y++
+- 08:
+  - move up, Z++
+  - green: toggle spindle (at full speed)
+- 09:
+  - move left, X--
+- 10:
+  - move XY to local coordinate zero
+  - green: zero out XY local coordinates at current position
+- 11:
+  - move right, X++
+- 12:
+  - move down, Z--
+  - green: zero out Z local at current position
+- 13:
+  -  move forward and left, X-- Y--
+- 14:
+  - move forward, Y--
+- 15:
+  - move foward and right, X++ Y--
+  - green: run macro to traverse the outline of current GCode at safe Z (10)
+- 16-20:
+  - panic! stop all movement! (executes gcode RESET)
+  - press 5x for system shutdown (via a ~/shutdown script)
+- 17-18
+  - unlock
+- 19
+  - execute z-probe with zero offset (z-probe offsets are zero because we are PCB-centric)
+  - green: run and apply z-probe grid on current GCode, zero offset
