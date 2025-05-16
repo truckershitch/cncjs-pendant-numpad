@@ -336,25 +336,74 @@ var createServer = function(options) {
             console.log("!!!!! key:"+kbdevent.key+" numlock:"+numlock);
 
             switch (kbdevent.key) {
+                
+                // case 84: // [2] key: /
+                //     if (!numlock) {
+                //         kbdevent.default_move = 0.1;
+                //     } else {
+                //         send_cmd('gcode:stop');
+
+                //         send_cmd('reset');
+                //         setTimeout( function() {
+                //             send_cmd('unlock');
+                //             setTimeout( goto_safe_z, 500);
+                //         }, 1500 );
+                //     }
+                //     break;
+                // case 42: // [4] key: Backspace
+                //     if (!numlock) {
+                //         kbdevent.default_move = 10;
+                //     } else {
+                //         send_cmd('gcode:start');
+                //     }
+                //     break;
+                // case 95: // KP_9
+                //     if (!numlock) {
+                //         send_gcode("G91 X-" + kbdevent.move + " Y" + kbdevent.move);
+                //     } else {
+                //     }
+                //     break;
+                // case 96: // OLD WAS => KP_8 arrow: up
+                //     send_gcode("G91 Y" + kbdevent.move + ";\n");
+                //     break;
+                // case 97: // [7] arrow: Page up
+                //     send_gcode("G91 X" + kbdevent.move + " Y" + kbdevent.move);
+                //     break;
+                // case 86: // [8] -
+                //     if (!numlock) {
+                //         send_gcode("G91 Z" + kbdevent.move);
+                //     } else {
+                //         toggle_spindle();
+                //     }
+                //     break;
+                // case 94: // [11] arrow: right
+                //     send_gcode("G91 X" + kbdevent.move);
+                //     break;
+                // case 87: // [12] +
+                //     if (!numlock) {
+                //         send_gcode("G91 Z-" + kbdevent.move);
+                //     } else {
+                //         send_gcode("G10 L20 P1 Z0");
+                //     }
+                //     break;
+                // case 99: // [19] . z-probe
+                //     if (!numlock) {
+                //         send_gcode("G91");
+                //         send_gcode("G38.2 Z-10 F87");
+                //         send_gcode("G10 L20 P1 Z"+options.probeOffset);
+                //         send_gcode("G91");
+                //         send_gcode("G0 Z4");
+                //         send_gcode("G90");
+                //     } else {
+                //         console.log("attempting to run the z-probe grid macro");
+                //         run_macro("3a31356e-844c-4aab-bcca-ef28321f77c2");
+                //     }
+                //     break;
+                
                 case 83:  // [1] numlock, only hits in pairs tho, not individual
                     store.numlock_at = new Date();
                     break;
-
-                case 84: // [2] key: /
-                    if (!numlock) {
-                        kbdevent.default_move = 0.1;
-                    } else {
-                        send_cmd('gcode:stop');
-
-                        send_cmd('reset');
-                        setTimeout( function() {
-                            send_cmd('unlock');
-                            setTimeout( goto_safe_z, 500);
-                        }, 1500 );
-                    }
-                    break;
-
-                case 85: // [3] key: *
+                case 85: // "KC_PAUSE"
                     if (!numlock) {
                         kbdevent.default_move = 1;
                     } else {
@@ -364,84 +413,42 @@ var createServer = function(options) {
                         if (active_state('Hold')) {
                             send_cmd('gcode:resume');
                         }
-
                     }
                     break;
-
-                case 42: // [4] key: Backspace
+                case 95: // Z+ "KP_7" "B/W Arrow up"
+                    send_gcode("G91 Z" + kbdevent.move);
+                    break;
+                case 92: // Z- "KP_4" "B/W Arrow down"
+                    send_gcode("G91 Z-" + kbdevent.move);
+                    break;
+                case 74: // Home / Set X0Y0 "KC_HOME"
                     if (!numlock) {
-                        kbdevent.default_move = 10;
-                    } else {
-                        send_cmd('gcode:start');
-                    }
-                    break;
-
-                case 95: // [5] home
-                    if (!numlock) {
-                        send_gcode("G91 X-" + kbdevent.move + " Y" + kbdevent.move);
-                    } else {
-                    }
-                    break;
-                case 96: // [6] arrow: up
-                    send_gcode("G91 Y" + kbdevent.move + ";\n");
-                    break;
-
-                case 97: // [7] arrow: Page up
-                    send_gcode("G91 X" + kbdevent.move + " Y" + kbdevent.move);
-                    break;
-                case 86: // [8] -
-                    if (!numlock) {
-                        send_gcode("G91 Z" + kbdevent.move);
-                    } else {
-                        toggle_spindle();
-                    }
-                    break;
-
-                case 92: // [9] arrow: left
-                    send_gcode("G91 X-" + kbdevent.move);
-                    break;
-
-                case 93: // [10] Key: 5
-                    if (!numlock) {
-
                         send_gcode("G90 X0 Y0");
                     } else {
-                        send_gcode("G10 L20 P1 X0 Y0");
-
+                        send_gcode("G10 L20 P1 X0 Y0"); // set X0 and Y0 to present location
                     }
                     break;
-
-                case 94: // [11] arrow: right
+                case 89: // Z- arrow left or "KP_1"
+                    // send_gcode("G91 X-" + kbdevent.move + " Y-" + kbdevent.move);
+                    // break;
+                    send_gcode("G91 X-" + kbdevent.move);
+                    break;
+                case 94: // Y+ arrow up "KP_5"
+                    send_gcode("G91 Y" + kbdevent.move);
+                    break;
+                case 90: // Y- arrow down "KP_2"
+                    send_gcode("G91 Y-" + kbdevent.move);
+                    break;
+                case 91: // X+ arrow right "KP_3"
+                    // if (!numlock) {
+                    //     send_gcode("G91 X" + kbdevent.move + " Y-" + kbdevent.move);
+                    // } else {
+                    //     traipse_around_the_edges();
+                    // }
+                    // break;
                     send_gcode("G91 X" + kbdevent.move);
                     break;
-
-                case 87: // [12] +
-                    if (!numlock) {
-                        send_gcode("G91 Z-" + kbdevent.move);
-                    } else {
-                        send_gcode("G10 L20 P1 Z0");
-                    }
-                    break;
-
-                case 89: // [13] arrow: End
-                    send_gcode("G91 X-" + kbdevent.move + " Y-" + kbdevent.move);
-                    break;
-
-
-
-                case 90: // [14] arrow: down
-                    send_gcode("G91 Y-" + kbdevent.move + ";\n");
-                    break;
-
-                case 91: // [15] arrow: Page Down
-                    if (!numlock) {
-                        send_gcode("G91 X" + kbdevent.move + " Y-" + kbdevent.move);
-                    } else {
-                        traipse_around_the_edges();
-                    }
-                    break;
-
-                case 88: // [16/20] Key: OK or Enter
+                case 42: // Reset / Shutdown "KC_BSPC" or "PANIC"
                     if (store.key_repeats>=4) {
                         console.log("********************");
                         console.log("** Shutting down! **");
@@ -450,25 +457,26 @@ var createServer = function(options) {
                     }
                     send_cmd('reset');
                     break;
-
-                case 98: // [17/18] key: 0/ins
+                case 24: // Unlock "KC_U"
                     send_cmd('unlock');
                     break;
-
-                case 99: // [19] . z-probe
-                    if (!numlock) {
-                        send_gcode("G91");
-                        send_gcode("G38.2 Z-10 F87");
-                        send_gcode("G10 L20 P1 Z"+options.probeOffset);
-                        send_gcode("G91");
-                        send_gcode("G0 Z4");
-                        send_gcode("G90");
-                    } else {
-                        console.log("attempting to run the z-probe grid macro");
-                        run_macro("3a31356e-844c-4aab-bcca-ef28321f77c2");
-                    }
+                case 58: // Move 1 "KC_F1"
+                    kbdevent.default_move = 1;
                     break;
-
+                case 59: // Move 5 "KC_F2"
+                    kbdevent.default_move = 5;
+                    break;
+                case 60: // Move 20 "KC_F3"
+                    kbdevent.default_move = 20;
+                    break;
+                case 61: // Move 100 "KC_F4"
+                    kbdevent.default_move = 100;
+                    break;
+                case 104: // "KC_F13" : Bitzero Macro (Murphpad FN key + KP_ENTER)
+                    console.log("attempting to run the BitZero macro");
+                    // run:macro args: id, context = {}, callback = noop
+                    socket.emit('command', options.port, 'macro:run', '0c613845-cffa-46d5-b269-4c45fc016c6b', {});
+                    break;
             }
 
         }
