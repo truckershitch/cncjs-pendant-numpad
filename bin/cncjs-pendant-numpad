@@ -37,18 +37,20 @@ program
         "access token lifetime in seconds or a time span string (default: 30d)",
         "30d"
     )
-    .option(
-        "--probeoffset <offset>",
-        "offset (thickness) for Z probe",
-        '1.56'
-    )
-    .option(
+    // .option(
+    //     "--probeoffset <offset>",
+    //     "offset (thickness) for Z probe",
+    //     '1.56'
+    // )
+    .option( // MechWild
         "--vendorid <vendor>",
-        "Vendor ID of USB HID device"
+        "Vendor ID of USB HID device",
+        "6d77"
     )
-    .option(
+    .option( // MurphPad
         "--productid <product>",
-        "Product ID of USB HID device"
+        "Product ID of USB HID device",
+        "1705"
     );
 
 program.parse(process.argv);
@@ -62,8 +64,8 @@ var options = {
     controllerType: program.controllerType,
     accessTokenLifetime: program.accessTokenLifetime,
     vendorid: program.vendorid,
-    productid: program.productid,
-    probeoffset: program.probeoffset
+    productid: program.productid
+    // probeoffset: program.probeoffset
 };
 
 if (options.list) {
@@ -263,33 +265,33 @@ var createServer = function(options) {
             socket.emit('command', options.port, cmd);
         };
 
-        function run_macro(macro_id) {
+        // function run_macro(macro_id) {
 
-            var context = { source: "feeder" } // to fool cncjs-kt-ext into running
-            const bbox = store.bbox;
-            const stat = store.controller.state.status;
+        //     var context = { source: "feeder" } // to fool cncjs-kt-ext into running
+        //     const bbox = store.bbox;
+        //     const stat = store.controller.state.status;
 
-            context.xmin = bbox.xmin;
-            context.xmax = bbox.xmax;
-            context.ymin = bbox.ymin;
-            context.ymax = bbox.ymax;
+        //     context.xmin = bbox.xmin;
+        //     context.xmax = bbox.xmax;
+        //     context.ymin = bbox.ymin;
+        //     context.ymax = bbox.ymax;
 
-            context.mposx = parseFloat(stat.mpos.x);
-            context.mposy = parseFloat(stat.mpos.y);
-            context.mposz = parseFloat(stat.mpos.z);
+        //     context.mposx = parseFloat(stat.mpos.x);
+        //     context.mposy = parseFloat(stat.mpos.y);
+        //     context.mposz = parseFloat(stat.mpos.z);
 
-            context.posx = parseFloat(stat.wpos.x);
-            context.posy = parseFloat(stat.wpos.y);
-            context.posz = parseFloat(stat.wpos.z);
+        //     context.posx = parseFloat(stat.wpos.x);
+        //     context.posy = parseFloat(stat.wpos.y);
+        //     context.posz = parseFloat(stat.wpos.z);
 
-            console.log("running macro id",macro_id,"with context",context);
+        //     console.log("running macro id",macro_id,"with context",context);
 
 
-            // this is just enough context to kep cncjs-kt-ext happy
+        //     // this is just enough context to kep cncjs-kt-ext happy
 
-            // run:macro args: id, context = {}, callback = noop
-            socket.emit('command', options.port, 'macro:run', macro_id, context);
-        };
+        //     // run:macro args: id, context = {}, callback = noop
+        //     socket.emit('command', options.port, 'macro:run', macro_id, context);
+        // };
 
         function bbox_loaded() {
           var r = false;
@@ -313,19 +315,26 @@ var createServer = function(options) {
             }
         }
 
-        function toggle_spindle() {
-            // toggle spindle!
-            if (store.controller.state.status.spindle==0) {
-                console.log("Starting spindle");
-                send_gcode("M3 S20000");
-            } else {
-                console.log("Stopping spindle");
-                send_gcode("M5");
-            }
-            console.log("Querying.");
-            send_gcode("?",false);
-            //socket.emit("write",options.port,"?");
+        // function toggle_spindle() {
+        //     // toggle spindle!
+        //     if (store.controller.state.status.spindle==0) {
+        //         console.log("Starting spindle");
+        //         send_gcode("M3 S20000");
+        //     } else {
+        //         console.log("Stopping spindle");
+        //         send_gcode("M5");
+        //     }
+        //     console.log("Querying.");
+        //     send_gcode("?",false);
+        //     //socket.emit("write",options.port,"?");
 
+        // }
+
+        function jogSelect(move) {
+            // cycle through coarse movements
+            const jogs = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 5, 10, 20, 50, 100, 200, 500]; // HID keycode 4 to 17
+
+            kbdevent.default_move = jogs[move - 4]; // A = 0, N = 13
         }
 
         function sendToController() {
@@ -357,28 +366,6 @@ var createServer = function(options) {
                 //         send_cmd('gcode:start');
                 //     }
                 //     break;
-                // case 95: // KP_9
-                //     if (!numlock) {
-                //         send_gcode("G91 X-" + kbdevent.move + " Y" + kbdevent.move);
-                //     } else {
-                //     }
-                //     break;
-                // case 96: // OLD WAS => KP_8 arrow: up
-                //     send_gcode("G91 Y" + kbdevent.move + ";\n");
-                //     break;
-                // case 97: // [7] arrow: Page up
-                //     send_gcode("G91 X" + kbdevent.move + " Y" + kbdevent.move);
-                //     break;
-                // case 86: // [8] -
-                //     if (!numlock) {
-                //         send_gcode("G91 Z" + kbdevent.move);
-                //     } else {
-                //         toggle_spindle();
-                //     }
-                //     break;
-                // case 94: // [11] arrow: right
-                //     send_gcode("G91 X" + kbdevent.move);
-                //     break;
                 // case 87: // [12] +
                 //     if (!numlock) {
                 //         send_gcode("G91 Z-" + kbdevent.move);
@@ -399,20 +386,43 @@ var createServer = function(options) {
                 //         run_macro("3a31356e-844c-4aab-bcca-ef28321f77c2");
                 //     }
                 //     break;
-                
+
+                // rotary encoder has turned on MurphPad
+                case 4:
+                case 5:
+                case 6:
+                case 7:
+                case 8:
+                case 9:
+                case 10:
+                case 11:
+                case 12:
+                case 13:
+                case 14:
+                case 15:
+                case 16:
+                case 17:
+                    jogSelect(kbdevent.key);
+
                 case 83:  // [1] numlock, only hits in pairs tho, not individual
                     store.numlock_at = new Date();
                     break;
                 case 85: // "KC_PAUSE"
-                    if (!numlock) {
-                        kbdevent.default_move = 1;
-                    } else {
-                        if (active_state('Run')) {
-                            send_cmd('gcode:pause');
-                        }
-                        if (active_state('Hold')) {
-                            send_cmd('gcode:resume');
-                        }
+                    // if (!numlock) {
+                    //     kbdevent.default_move = 1;
+                    // } else {
+                    //     if (active_state('Run')) {
+                    //         send_cmd('gcode:pause');
+                    //     }
+                    //     if (active_state('Hold')) {
+                    //         send_cmd('gcode:resume');
+                    //     }
+                    // }
+                    if (active_state('Run')) {
+                        send_cmd('gcode:pause');
+                    }
+                    if (active_state('Hold')) {
+                        send_cmd('gcode:resume');
                     }
                     break;
                 case 95: // Z+ "KP_7" "B/W Arrow up"
@@ -421,34 +431,33 @@ var createServer = function(options) {
                 case 92: // Z- "KP_4" "B/W Arrow down"
                     send_gcode("G91 Z-" + kbdevent.move);
                     break;
-                case 74: // Home / Set X0Y0 "KC_HOME"
+                case 74: // Home Machine / G28 "KC_HOME"
+                    send_gcode("G28");
+                    break;
+                case 93: // Move to X0Y0 / Set X0Y0 "KC_5"
                     if (!numlock) {
                         send_gcode("G90 X0 Y0");
+                        break;
                     } else {
                         send_gcode("G10 L20 P1 X0 Y0"); // set X0 and Y0 to present location
                     }
                     break;
-                case 89: // Z- arrow left or "KP_1"
-                    // send_gcode("G91 X-" + kbdevent.move + " Y-" + kbdevent.move);
-                    // break;
+                case 94: // X+ arrow right "KP_6"
+                    send_gcode("G91 X" + kbdevent.move);
+                    break;
+                case 92: // X- arrow left "KP_4"
                     send_gcode("G91 X-" + kbdevent.move);
                     break;
-                case 94: // Y+ arrow up "KP_5"
+                case 97: // Y+ arrow up "KP_8"
                     send_gcode("G91 Y" + kbdevent.move);
                     break;
                 case 90: // Y- arrow down "KP_2"
                     send_gcode("G91 Y-" + kbdevent.move);
                     break;
-                case 91: // X+ arrow right "KP_3"
-                    // if (!numlock) {
-                    //     send_gcode("G91 X" + kbdevent.move + " Y-" + kbdevent.move);
-                    // } else {
-                    //     traipse_around_the_edges();
-                    // }
-                    // break;
-                    send_gcode("G91 X" + kbdevent.move);
+                case 10: // Trace edges of gcode "G" "KP_9"
+                    traipse_around_the_edges();
                     break;
-                case 42: // Reset / Shutdown "KC_BSPC" or "PANIC"
+                case 42: // Reset / Shutdown "KC_BSPC" "PANIC"
                     if (store.key_repeats>=4) {
                         console.log("********************");
                         console.log("** Shutting down! **");
@@ -457,7 +466,7 @@ var createServer = function(options) {
                     }
                     send_cmd('reset');
                     break;
-                case 24: // Unlock "KC_U"
+                case 24: // Unlock "KC_U" "KP_PAST"
                     send_cmd('unlock');
                     break;
                 case 58: // Move 1 "KC_F1"
@@ -472,10 +481,17 @@ var createServer = function(options) {
                 case 61: // Move 100 "KC_F4"
                     kbdevent.default_move = 100;
                     break;
-                case 104: // "KC_F13" : Bitzero Macro (Murphpad FN key + KP_ENTER)
+                case 103: // "KC_F12" : Bitzero Macro (Murphpad FN key + KP_ENTER)
                     console.log("attempting to run the BitZero macro");
                     // run:macro args: id, context = {}, callback = noop
                     socket.emit('command', options.port, 'macro:run', '0c613845-cffa-46d5-b269-4c45fc016c6b', {});
+                    break;
+                case 88: // KP_Enter
+                    if (!numlock) {
+                        // kbdevent.default_move = 10;
+                    } else {
+                        send_cmd('gcode:start');
+                    }
                     break;
             }
 
