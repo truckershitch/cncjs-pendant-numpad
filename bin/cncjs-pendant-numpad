@@ -334,8 +334,11 @@ var createServer = function(options) {
             // cycle through coarse movements
             const jogs = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 5, 10, 20, 50, 100, 200, 500]; // HID keycode 4 to 17
 
-            console.log("Rotary Encoder sent: ", move);
-            kbdevent.default_move = jogs[move - 4]; // A = 0, N = 13
+            // console.log("Rotary Encoder sent: ", move);
+    	    let jog = jogs[move - 4]; // A = 0, N = 13
+	        console.log("Jog set to ", jog);
+
+            kbdevent.default_move = jog;
         }
 
         function sendToController() {
@@ -346,7 +349,7 @@ var createServer = function(options) {
             console.log("!!!!! key:"+kbdevent.key+" numlock:"+numlock);
 
             switch (kbdevent.key) {
-                
+
                 // case 84: // [2] key: /
                 //     if (!numlock) {
                 //         kbdevent.default_move = 0.1;
@@ -432,10 +435,10 @@ var createServer = function(options) {
                 case 92: // Z- "KP_4" "B/W Arrow down"
                     send_gcode("G91 Z-" + kbdevent.move);
                     break;
-                case 74: // Home Machine / G28 "KC_HOME"
+                case 74: // Home Machine / "KC_HOME"
                     send_gcode("$H");
                     break;
-                case 93: // Move to X0Y0 / Set X0Y0 "KC_5"
+                case 96: // Move to X0Y0 / Set X0Y0 "KC_8" "Z"
                     if (!numlock) {
                         send_gcode("G90 X0 Y0");
                         break;
@@ -455,7 +458,7 @@ var createServer = function(options) {
                 case 90: // Y- arrow down "KP_2"
                     send_gcode("G91 Y-" + kbdevent.move);
                     break;
-                case 10: // Trace edges of gcode "G" "KP_9"
+                case 97: // Trace edges of gcode "G" "KP_9"
                     traipse_around_the_edges();
                     break;
                 case 42: // Reset / Shutdown "KC_BSPC" "PANIC"
@@ -482,7 +485,7 @@ var createServer = function(options) {
                 case 61: // Move 100 "KC_F4"
                     kbdevent.default_move = 100;
                     break;
-                case 103: // "KC_F12" : Bitzero Macro (Murphpad FN key + KP_ENTER)
+                case 69: // "KC_F12" : Bitzero Macro (Murphpad FN key + KP_ENTER)
                     console.log("attempting to run the BitZero macro");
                     // run:macro args: id, context = {}, callback = noop
                     socket.emit('command', options.port, 'macro:run', '0c613845-cffa-46d5-b269-4c45fc016c6b', {});
