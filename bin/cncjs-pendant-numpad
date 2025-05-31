@@ -19,12 +19,12 @@ program
     .usage("-s <secret> -p <port> [options]")
     .option("-l, --list", "list available ports then exit")
     .option("-s, --secret", "the secret key stored in the ~/.cncjs/cncrc.cfg file")
-    .option("-p, --port <port>", "path or name of serial port")
+    .option("-p, --port <port>", "path or name of serial port", "/dev/ttyACM0")
     .option("-b, --baudrate <baudrate>", "baud rate (default: 115200)", 115200)
     .option(
         "--socket-address <address>",
-        "socket address or hostname (default: localhost)",
-        "localhost"
+        "socket address or hostname (default: 192.168.1.94)",
+        "192.168.1.94"
     )
     .option("--socket-port <port>", "socket port (default: 8000)", 8000)
     .option(
@@ -45,12 +45,12 @@ program
     .option( // MechWild
         "--vendorid <vendor>",
         "Vendor ID of USB HID device",
-        "6d77"
+        0x6d77
     )
     .option( // MurphPad
         "--productid <product>",
         "Product ID of USB HID device",
-        "1705"
+        0x1705
     );
 
 program.parse(process.argv);
@@ -334,6 +334,7 @@ var createServer = function(options) {
             // cycle through coarse movements
             const jogs = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 5, 10, 20, 50, 100, 200, 500]; // HID keycode 4 to 17
 
+            console.log("Rotary Encoder sent: ", move);
             kbdevent.default_move = jogs[move - 4]; // A = 0, N = 13
         }
 
@@ -432,7 +433,7 @@ var createServer = function(options) {
                     send_gcode("G91 Z-" + kbdevent.move);
                     break;
                 case 74: // Home Machine / G28 "KC_HOME"
-                    send_gcode("G28");
+                    send_gcode("$H");
                     break;
                 case 93: // Move to X0Y0 / Set X0Y0 "KC_5"
                     if (!numlock) {
@@ -442,13 +443,13 @@ var createServer = function(options) {
                         send_gcode("G10 L20 P1 X0 Y0"); // set X0 and Y0 to present location
                     }
                     break;
-                case 94: // X+ arrow right "KP_6"
+                case 91: // X+ arrow right "KP_3"
                     send_gcode("G91 X" + kbdevent.move);
                     break;
-                case 92: // X- arrow left "KP_4"
+                case 89: // X- arrow left "KP_1"
                     send_gcode("G91 X-" + kbdevent.move);
                     break;
-                case 97: // Y+ arrow up "KP_8"
+                case 93: // Y+ arrow up "KP_5"
                     send_gcode("G91 Y" + kbdevent.move);
                     break;
                 case 90: // Y- arrow down "KP_2"
