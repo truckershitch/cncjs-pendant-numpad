@@ -438,14 +438,6 @@ var createServer = function(options) {
                 case 74: // Home Machine / "KC_HOME"
                     send_gcode("$H");
                     break;
-                case 96: // Move to X0Y0 / Set X0Y0 "KC_8" "Z"
-                    if (!numlock) {
-                        send_gcode("G90 X0 Y0");
-                        break;
-                    } else {
-                        send_gcode("G10 L20 P1 X0 Y0"); // set X0 and Y0 to present location
-                    }
-                    break;
                 case 91: // X+ arrow right "KP_3"
                     send_gcode("G91 X" + kbdevent.move);
                     break;
@@ -458,8 +450,19 @@ var createServer = function(options) {
                 case 90: // Y- arrow down "KP_2"
                     send_gcode("G91 Y-" + kbdevent.move);
                     break;
-                case 97: // Trace edges of gcode "G" "KP_9"
+                case 85: // Unlock "KC_U" "KP_PAST"
+                    send_cmd('unlock');
+                    break;
+                case 97: // Trace edges of gcode "KP_9" "G"
                     traipse_around_the_edges();
+                    break;
+                case 94: // Move to X0Y0 / Set X0Y0 "KC_6" "Z"
+                    if (!numlock) {
+                        send_gcode("G90 X0 Y0");
+                        break;
+                    } else {
+                        send_gcode("G10 L20 P1 X0 Y0"); // set X0 and Y0 to present location
+                    }
                     break;
                 case 42: // Reset / Shutdown "KC_BSPC" "PANIC"
                     if (store.key_repeats>=4) {
@@ -469,9 +472,6 @@ var createServer = function(options) {
                         shutdown();
                     }
                     send_cmd('reset');
-                    break;
-                case 24: // Unlock "KC_U" "KP_PAST"
-                    send_cmd('unlock');
                     break;
                 case 58: // Move 1 "KC_F1"
                     kbdevent.default_move = 1;
