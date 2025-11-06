@@ -248,7 +248,7 @@ var createServer = function(options) {
         };
 
         function active_state(t) {
-            console.log("Checking activate.  It is",store.controller.state.status.activeState,"looking for",t);
+            console.log("Checking active state.  It is",store.controller.state.status.activeState,"looking for",t);
             return store.controller.state.status.activeState==t;
         };
 
@@ -331,7 +331,8 @@ var createServer = function(options) {
         // }
 
         function jogSelect(move) {
-            // cycle through coarse movements
+            // list of jog movements
+            // MurphPad will send a keycode in range KC_A to KC_N (4 to 17)
             const jogs = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 5, 10, 20, 50, 100, 200, 500]; // HID keycode 4 to 17
 
             // console.log("Rotary Encoder sent: ", move);
@@ -399,7 +400,7 @@ var createServer = function(options) {
                 case val == 83:  // [1] numlock, only hits in pairs tho, not individual
                     store.numlock_at = new Date();
                     break;
-                case val == 85: // "KC_PAUSE"
+                case val == 72: // "KC_PAUSE"
                     if (active_state('Run')) {
                         send_cmd('gcode:pause');
                     }
@@ -408,25 +409,32 @@ var createServer = function(options) {
                     }
                     break;
                 case val == 95: // "KP_7" Z+ "B/W Arrow up"
-                    send_gcode("G91 Z" + kbdevent.move);
+                    send_gcode("G91 Z" + kbdevent.move + " F3000");
+                    send_gcode("G90");
                     break;
                 case val == 92: // "KP_4" Z- "B/W Arrow down"
-                    send_gcode("G91 Z-" + kbdevent.move);
+                    send_gcode("G91 Z-" + kbdevent.move + " F3000");
+                    send_gcode("G90");
                     break;
                 case val == 74: // Home Machine / "KC_HOME"
                     send_gcode("$H");
+                    send_gcode("G90");
                     break;
                 case val == 91: // "KP_3" X+ arrow right
-                    send_gcode("G91 X" + kbdevent.move);
+                    send_gcode("G91 X" + kbdevent.move + " F3000");
+                    send_gcode("G90");
                     break;
                 case val == 89: // "KP_1" X- arrow left
-                    send_gcode("G91 X-" + kbdevent.move);
+                    send_gcode("G91 X-" + kbdevent.move + " F3000");
+                    send_gcode("G90");
                     break;
                 case val == 93: // "KP_5" Y+ arrow up
-                    send_gcode("G91 Y" + kbdevent.move);
+                    send_gcode("G91 Y" + kbdevent.move + " F3000");
+                    send_gcode("G90");
                     break;
                 case val == 90: // "KP_2" Y- arrow down
-                    send_gcode("G91 Y-" + kbdevent.move);
+                    send_gcode("G91 Y-" + kbdevent.move + " F3000");
+                    send_gcode("G90");
                     break;
                 case val == 85: // "KP_PAST" Unlock "U"
                     send_cmd('unlock');
@@ -451,13 +459,6 @@ var createServer = function(options) {
                     }
                     send_cmd('reset');
                     break;
-                case val == 69: // "KC_F12" : Bitzero Macro (Murphpad FN key + KP_ENTER)
-                    if (!active_state('Run')) {
-                        console.log("Attempting to run the BitZero macro");
-                        // run:macro args: id, context = {}, callback = noop
-                        socket.emit('command', options.port, 'macro:run', '0c613845-cffa-46d5-b269-4c45fc016c6b', {});
-                    }
-                    break;
                 case val == 58: // "KC_F1" : Initial Tool BitSetter Macro
                     if (!active_state('Run')) {
                         console.log("Attempting to run the Initial Tool BitSetter macro");
@@ -470,6 +471,13 @@ var createServer = function(options) {
                         socket.emit('command', options.port, 'macro:run', '8dbb2ff9-23bb-4ff1-9b7b-75deb8fd9acb', {});
                     }
                     break;
+                case val == 60: // "KC_F3" : Bitzero Macro
+                    if (!active_state('Run')) {
+                        console.log("Attempting to run the BitZero macro");
+                        // run:macro args: id, context = {}, callback = noop
+                        socket.emit('command', options.port, 'macro:run', '0c613845-cffa-46d5-b269-4c45fc016c6b', {});
+                    }
+                    break;
                 // case val == 60: // "KC_F3" Move 20
                 //     kbdevent.default_move = 20;
                 //     break;
@@ -477,8 +485,10 @@ var createServer = function(options) {
                 //     kbdevent.default_move = 100;
                 //     break;
                 case val == 88: // KP_Enter
-                    if (!active_state('Run')) {
-                        send_cmd('gcode:start');
+                    if (store.key_repeats >= 3) {
+                        if (!active_state('Run')) {
+                            send_cmd('gcode:start');
+                        }
                     }
                     break;
             }
