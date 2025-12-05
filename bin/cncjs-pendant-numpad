@@ -64,7 +64,9 @@ var options = {
     controllerType: program.controllerType,
     accessTokenLifetime: program.accessTokenLifetime,
     vendorid: program.vendorid,
-    productid: program.productid
+    productid: program.productid,
+    usagepage: 0xff60,
+    usage: 0x61
     // probeoffset: program.probeoffset
 };
 
@@ -198,12 +200,26 @@ var createServer = function(options) {
                     item =>
                         item.vendorId === options.vendorId &&
                         item.productId === options.productId &&
+                        // item.usagePage === options.usagepage &&
+                        // item.usage == options.usage &&
                         item.interface === interface
                 ).path;
 
         console.log("Keyboard HID Address:", findPath(0));
+        // console.log("Keyboard HID Address:", findPath(1));
 
         var keyboard_main = new hid.HID(findPath(0));
+        // var keyboard_main = new hid.HID(findPath(1));
+        
+/*
+        const hidDevices = hid.devices();
+        const deviceInfo = hidDevices.find(function(d) {
+            const isDevice = d.vendorId === options.vendorId && d.productId === options.productId;
+            return isDevice && d.usagePage === options.usagepage && d.usage == options.usage;
+        });
+        var keyboard_main = new hid.HID(deviceInfo.path);
+    	console.log("Keyboard HID Address:", deviceInfo.path);        
+*/
 
         keyboard_main.on("data", function(data) {
             var recv = data.toJSON().data;
@@ -265,33 +281,35 @@ var createServer = function(options) {
             socket.emit('command', options.port, cmd);
         };
 
-        // function run_macro(macro_id) {
+        /*
+        function run_macro(macro_id) {
 
-        //     var context = { source: "feeder" } // to fool cncjs-kt-ext into running
-        //     const bbox = store.bbox;
-        //     const stat = store.controller.state.status;
+            var context = { source: "feeder" } // to fool cncjs-kt-ext into running
+            const bbox = store.bbox;
+            const stat = store.controller.state.status;
 
-        //     context.xmin = bbox.xmin;
-        //     context.xmax = bbox.xmax;
-        //     context.ymin = bbox.ymin;
-        //     context.ymax = bbox.ymax;
+            context.xmin = bbox.xmin;
+            context.xmax = bbox.xmax;
+            context.ymin = bbox.ymin;
+            context.ymax = bbox.ymax;
 
-        //     context.mposx = parseFloat(stat.mpos.x);
-        //     context.mposy = parseFloat(stat.mpos.y);
-        //     context.mposz = parseFloat(stat.mpos.z);
+            context.mposx = parseFloat(stat.mpos.x);
+            context.mposy = parseFloat(stat.mpos.y);
+            context.mposz = parseFloat(stat.mpos.z);
 
-        //     context.posx = parseFloat(stat.wpos.x);
-        //     context.posy = parseFloat(stat.wpos.y);
-        //     context.posz = parseFloat(stat.wpos.z);
+            context.posx = parseFloat(stat.wpos.x);
+            context.posy = parseFloat(stat.wpos.y);
+            context.posz = parseFloat(stat.wpos.z);
 
-        //     console.log("running macro id",macro_id,"with context",context);
+            console.log("running macro id",macro_id,"with context",context);
 
 
-        //     // this is just enough context to kep cncjs-kt-ext happy
+            // this is just enough context to kep cncjs-kt-ext happy
 
-        //     // run:macro args: id, context = {}, callback = noop
-        //     socket.emit('command', options.port, 'macro:run', macro_id, context);
-        // };
+            // run:macro args: id, context = {}, callback = noop
+            socket.emit('command', options.port, 'macro:run', macro_id, context);
+        };
+        */
 
         function bbox_loaded() {
           var r = false;
@@ -315,20 +333,22 @@ var createServer = function(options) {
             }
         }
 
-        // function toggle_spindle() {
-        //     // toggle spindle!
-        //     if (store.controller.state.status.spindle==0) {
-        //         console.log("Starting spindle");
-        //         send_gcode("M3 S20000");
-        //     } else {
-        //         console.log("Stopping spindle");
-        //         send_gcode("M5");
-        //     }
-        //     console.log("Querying.");
-        //     send_gcode("?",false);
-        //     //socket.emit("write",options.port,"?");
+        /*
+        function toggle_spindle() {
+            // toggle spindle!
+            if (store.controller.state.status.spindle==0) {
+                console.log("Starting spindle");
+                send_gcode("M3 S20000");
+            } else {
+                console.log("Stopping spindle");
+                send_gcode("M5");
+            }
+            console.log("Querying.");
+            send_gcode("?",false);
+            //socket.emit("write",options.port,"?");
 
-        // }
+        }
+        */
 
         function jogSelect(move) {
             // list of jog movements
@@ -342,6 +362,38 @@ var createServer = function(options) {
             kbdevent.default_move = jog;
         }
 
+        function send_position() {
+            function formatNum(num) {
+                const padLength = 3;
+
+                let wholePart = String(Math.trunc(num)).padStart(padLength, ' ');
+                let decimalPart = num.toString().split('.')[1];
+                if (typeof(decimalPart) === undefined) {
+                    decimalPart = '000';
+                }
+                return wholePart + '.' + decimalPart;
+            }
+
+            const stat = store.controller.state.status;
+            const pos = formatNum(stat.wpos.x) + formatNum(stat.wpos.y) + formatNum(stat.pos.z);
+            
+            let posVertical = '';
+            for (let i = 0; i < 7; i++) {
+                posVertical += pos[i] + pos[i + 7] + pos[i + 14];
+            }
+            // console.log('posVertical: ', posVertical);
+
+            const reportLength = 32;
+            const buffer = Buffer.alloc(reportLength + 1);
+            buffer.write(posVertical, 1, posVertical.length, 'utf8');
+
+            console.log('Work Position:  X:' + stat.wpos.x + ' Y:' + stat.wpos.y + ' Z:' + stat.wpos.z);
+
+            keyboard_main.write(buffer);
+
+            console.log('Data sent to keyboard: ', buffer);
+        }
+
         function sendToController() {
             // Calculate move size modifiers
             kbdevent.move = kbdevent.default_move;
@@ -350,51 +402,54 @@ var createServer = function(options) {
             console.log("!!!!! key:"+kbdevent.key+" numlock:"+numlock);
 
             let val = kbdevent.key;
-            switch (true) {
+            let fr = " F6000";
+            switch (true) { // "true" allows conditions in switch statement
 
-                // case 84: // [2] key: /
-                //     if (!numlock) {
-                //         kbdevent.default_move = 0.1;
-                //     } else {
-                //         send_cmd('gcode:stop');
+           /*
+                case 84: // [2] key: /
+                    if (!numlock) {
+                        kbdevent.default_move = 0.1;
+                    } else {
+                        send_cmd('gcode:stop');
 
-                //         send_cmd('reset');
-                //         setTimeout( function() {
-                //             send_cmd('unlock');
-                //             setTimeout( goto_safe_z, 500);
-                //         }, 1500 );
-                //     }
-                //     break;
-                // case 42: // [4] key: Backspace
-                //     if (!numlock) {
-                //         kbdevent.default_move = 10;
-                //     } else {
-                //         send_cmd('gcode:start');
-                //     }
-                //     break;
-                // case 87: // [12] +
-                //     if (!numlock) {
-                //         send_gcode("G91 Z-" + kbdevent.move);
-                //     } else {
-                //         send_gcode("G10 L20 P1 Z0");
-                //     }
-                //     break;
-                // case 99: // [19] . z-probe
-                //     if (!numlock) {
-                //         send_gcode("G91");
-                //         send_gcode("G38.2 Z-10 F87");
-                //         send_gcode("G10 L20 P1 Z"+options.probeOffset);
-                //         send_gcode("G91");
-                //         send_gcode("G0 Z4");
-                //         send_gcode("G90");
-                //     } else {
-                //         console.log("attempting to run the z-probe grid macro");
-                //         run_macro("3a31356e-844c-4aab-bcca-ef28321f77c2");
-                //     }
-                //     break;
+                        send_cmd('reset');
+                        setTimeout( function() {
+                            send_cmd('unlock');
+                            setTimeout( goto_safe_z, 500);
+                        }, 1500 );
+                    }
+                    break;
+                case 42: // [4] key: Backspace
+                    if (!numlock) {
+                        kbdevent.default_move = 10;
+                    } else {
+                        send_cmd('gcode:start');
+                    }
+                    break;
+                case 87: // [12] +
+                    if (!numlock) {
+                        send_gcode("G91 Z-" + kbdevent.move);
+                    } else {
+                        send_gcode("G10 L20 P1 Z0");
+                    }
+                    break;
+                case 99: // [19] . z-probe
+                    if (!numlock) {
+                        send_gcode("G91");
+                        send_gcode("G38.2 Z-10 F87");
+                        send_gcode("G10 L20 P1 Z"+options.probeOffset);
+                        send_gcode("G91");
+                        send_gcode("G0 Z4");
+                        send_gcode("G90");
+                    } else {
+                        console.log("attempting to run the z-probe grid macro");
+                        run_macro("3a31356e-844c-4aab-bcca-ef28321f77c2");
+                    }
+                    break;
+            */
 
-                // rotary encoder has turned on MurphPad
                 case val >= 4 && val <= 17:
+                    // rotary encoder has turned on MurphPad
                     jogSelect(kbdevent.key);
                     break;
                 case val == 83:  // [1] numlock, only hits in pairs tho, not individual
@@ -408,46 +463,65 @@ var createServer = function(options) {
                         send_cmd('gcode:resume');
                     }
                     break;
+                case val == 74: // Home Machine / "KC_HOME"
+                    send_cmd('homing');
+                    send_position();
+                    break;
                 case val == 95: // "KP_7" Z+ "B/W Arrow up"
-                    send_gcode("G91 Z" + kbdevent.move + " F3000");
+                    send_gcode("G91");
+                    send_gcode("G0 Z" + kbdevent.move + fr);
                     send_gcode("G90");
+                    send_position();
                     break;
                 case val == 92: // "KP_4" Z- "B/W Arrow down"
-                    send_gcode("G91 Z-" + kbdevent.move + " F3000");
+                    send_gcode("G91");
+                    send_gcode("G0 Z-" + kbdevent.move + fr);
                     send_gcode("G90");
-                    break;
-                case val == 74: // Home Machine / "KC_HOME"
-                    send_gcode("$H");
-                    send_gcode("G90");
+                    send_position();
                     break;
                 case val == 91: // "KP_3" X+ arrow right
-                    send_gcode("G91 X" + kbdevent.move + " F3000");
+                    send_gcode("G91");
+                    send_gcode("G0 X" + kbdevent.move + fr);
                     send_gcode("G90");
+                    send_position();
                     break;
                 case val == 89: // "KP_1" X- arrow left
-                    send_gcode("G91 X-" + kbdevent.move + " F3000");
+                    send_gcode("G91");
+                    send_gcode("G0 X-" + kbdevent.move + fr);
                     send_gcode("G90");
+                    send_position();
                     break;
                 case val == 93: // "KP_5" Y+ arrow up
-                    send_gcode("G91 Y" + kbdevent.move + " F3000");
+                    send_gcode("G91");
+                    send_gcode("G0 Y" + kbdevent.move + fr);
                     send_gcode("G90");
+                    send_position();
                     break;
                 case val == 90: // "KP_2" Y- arrow down
-                    send_gcode("G91 Y-" + kbdevent.move + " F3000");
+                    send_gcode("G91");
+                    send_gcode("G0 Y-" + kbdevent.move + fr);
                     send_gcode("G90");
-                    break;
-                case val == 85: // "KP_PAST" Unlock "U"
-                    send_cmd('unlock');
-                    break;
-                case val == 97: // "KP_9" Trace edges of gcode "G"
-                    traipse_around_the_edges();
+                    send_position();
                     break;
                 case val == 94: // "KP_6" Move to X0Y0 / Set X0Y0 "Z"
                     if (!numlock) {
-                        send_gcode("G90 X0 Y0");
-                        break;
+                        send_gcode("G90 X0 Y0" + fr);
                     } else {
                         send_gcode("G10 L20 P1 X0 Y0"); // set X0 and Y0 to present location
+                    }
+                    send_position();
+                    break;
+                case val == 85: // "KP_PAST" Unlock "U"
+                    if (active_state('Alarm')) {
+                        send_cmd('reset');
+                    }
+                    else {
+                        send_cmd('unlock');
+                    }
+                    break;
+                case val == 97: // "KP_9" Trace edges of gcode "G"
+                    if (!active_state('Run')) {
+                        traipse_around_the_edges();
                     }
                     break;
                 case val == 42: // "KC_BSPC" Reset / Shutdown "PANIC"
@@ -476,14 +550,18 @@ var createServer = function(options) {
                         console.log("Attempting to run the BitZero macro");
                         // run:macro args: id, context = {}, callback = noop
                         socket.emit('command', options.port, 'macro:run', '0c613845-cffa-46d5-b269-4c45fc016c6b', {});
+
+                        send_position();
                     }
                     break;
-                // case val == 60: // "KC_F3" Move 20
-                //     kbdevent.default_move = 20;
-                //     break;
-                // case val == 61: // "KC_F4" Move 100
-                //     kbdevent.default_move = 100;
-                //     break;
+                /*
+                case val == 60: // "KC_F3" Move 20
+                    kbdevent.default_move = 20;
+                    break;
+                case val == 61: // "KC_F4" Move 100
+                    kbdevent.default_move = 100;
+                    break;
+                */
                 case val == 88: // KP_Enter
                     if (store.key_repeats >= 3) {
                         if (!active_state('Run')) {
