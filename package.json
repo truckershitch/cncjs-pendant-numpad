@@ -35,7 +35,7 @@
     "inquirer": "^3.0.1",
     "jsonwebtoken": "7.4.3",
     "lodash": "^4.17.20",
-    "node-hid": "^2.1.1",
+    "node-hid": "^2.2.0",
     "serialport": "^9.0.3",
     "socket.io-client": "^2.3.0",
     "vorpal": "^1.12.0"

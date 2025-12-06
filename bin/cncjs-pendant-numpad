@@ -375,11 +375,11 @@ var createServer = function(options) {
             }
 
             const stat = store.controller.state.status;
-            const pos = formatNum(stat.wpos.x) + formatNum(stat.wpos.y) + formatNum(stat.pos.z);
+            const pos = 'X ' + formatNum(stat.wpos.x) + 'Y ' + formatNum(stat.wpos.y) + 'Z ' + formatNum(stat.pos.z);
             
             let posVertical = '';
-            for (let i = 0; i < 7; i++) {
-                posVertical += pos[i] + pos[i + 7] + pos[i + 14];
+            for (let i = 0; i < 9; i++) {
+                posVertical += pos[i] + pos[i + 9] + pos[i + 18];
             }
             // console.log('posVertical: ', posVertical);
 
@@ -468,46 +468,41 @@ var createServer = function(options) {
                     send_position();
                     break;
                 case val == 95: // "KP_7" Z+ "B/W Arrow up"
-                    send_gcode("G91");
-                    send_gcode("G0 Z" + kbdevent.move + fr);
+                    send_gcode("G91 Z" + kbdevent.move + fr);
                     send_gcode("G90");
                     send_position();
                     break;
                 case val == 92: // "KP_4" Z- "B/W Arrow down"
-                    send_gcode("G91");
-                    send_gcode("G0 Z-" + kbdevent.move + fr);
+                    send_gcode("G91 Z-" + kbdevent.move + fr);
                     send_gcode("G90");
                     send_position();
                     break;
                 case val == 91: // "KP_3" X+ arrow right
-                    send_gcode("G91");
-                    send_gcode("G0 X" + kbdevent.move + fr);
+                    send_gcode("G91 X" + kbdevent.move + fr);
                     send_gcode("G90");
                     send_position();
                     break;
                 case val == 89: // "KP_1" X- arrow left
-                    send_gcode("G91");
-                    send_gcode("G0 X-" + kbdevent.move + fr);
+                    send_gcode("G91 X-" + kbdevent.move + fr);
                     send_gcode("G90");
                     send_position();
                     break;
                 case val == 93: // "KP_5" Y+ arrow up
-                    send_gcode("G91");
-                    send_gcode("G0 Y" + kbdevent.move + fr);
+                    send_gcode("G91 Y" + kbdevent.move + fr);
                     send_gcode("G90");
                     send_position();
                     break;
                 case val == 90: // "KP_2" Y- arrow down
-                    send_gcode("G91");
-                    send_gcode("G0 Y-" + kbdevent.move + fr);
+                    send_gcode("G91 Y-" + kbdevent.move + fr);
                     send_gcode("G90");
                     send_position();
                     break;
                 case val == 94: // "KP_6" Move to X0Y0 / Set X0Y0 "Z"
-                    if (!numlock) {
-                        send_gcode("G90 X0 Y0" + fr);
-                    } else {
-                        send_gcode("G10 L20 P1 X0 Y0"); // set X0 and Y0 to present location
+                    if (!numlock) { // numlock off
+                        // send_gcode("G10 L20 P1 X0 Y0"); // set X0 and Y0 to present location
+                        send_gcode("G92 X0 Y0");
+                    } else { // numlock on -- powered on state
+                        send_gcode("G92 Z0"); // set Z0 to present Z height
                     }
                     send_position();
                     break;

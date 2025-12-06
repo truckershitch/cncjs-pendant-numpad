@@ -50,12 +50,13 @@
             return wholePart + '.' + decimalPart;
         }
 
-        const pos = formatNum(222.124) + formatNum(452.332) + formatNum(55.002);
+        const pos = "X " + formatNum(222.124) + "Y " + formatNum(452.332) + "Z " + formatNum(55.002);
+        
         console.log("pos: ", pos);
 
         let posVertical = "";
-        for (let i = 0; i < 7; i++) {
-            posVertical += pos[i] + pos[i + 7] + pos[i + 14];
+        for (let i = 0; i < 9; i++) {
+            posVertical += pos[i] + pos[i + 9] + pos[i + 18];
         }
         console.log("posVertical: ", posVertical);
 
