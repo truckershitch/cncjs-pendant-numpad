@@ -129,6 +129,7 @@ var createServer = function(options) {
     serverMain(options, function(err, socket) {
         socket.on("Grbl:state", function(state) {
             store.controller.state = state;
+            send_position();
         });
         socket.on("Grbl:settings", function(settings) {
             store.controller.settings = settings;
@@ -200,30 +201,26 @@ var createServer = function(options) {
                     item =>
                         item.vendorId === options.vendorId &&
                         item.productId === options.productId &&
-                        // item.usagePage === options.usagepage &&
-                        // item.usage == options.usage &&
+                        item.usagePage === options.usagepage &&
+                        item.usage == options.usage &&
                         item.interface === interface
                 ).path;
 
-        console.log("Keyboard HID Address:", findPath(0));
-        // console.log("Keyboard HID Address:", findPath(1));
+        // console.log("Keyboard HID Address:", findPath(0));
+        console.log("Keyboard HID Address:", findPath(1));
 
-        var keyboard_main = new hid.HID(findPath(0));
-        // var keyboard_main = new hid.HID(findPath(1));
+        // var keyboard_main = new hid.HID(findPath(0));
+        var keyboard_main = new hid.HID(findPath(1));
         
-/*
-        const hidDevices = hid.devices();
-        const deviceInfo = hidDevices.find(function(d) {
-            const isDevice = d.vendorId === options.vendorId && d.productId === options.productId;
-            return isDevice && d.usagePage === options.usagepage && d.usage == options.usage;
-        });
-        var keyboard_main = new hid.HID(deviceInfo.path);
-    	console.log("Keyboard HID Address:", deviceInfo.path);        
-*/
-
         keyboard_main.on("data", function(data) {
+            console.log("Received keypress: ", data);
+
             var recv = data.toJSON().data;
+            console.log("recv: ", recv);
+
             var bits = recv.shift();
+            console.log("bits: ", bits);
+
             kbdevent.numlock = (new Date() - store.numlock_at)<250;
             kbdevent.l_control = (bits & 1) !== 0;
             kbdevent.l_shift = (bits & 2) !== 0;
@@ -362,36 +359,55 @@ var createServer = function(options) {
             kbdevent.default_move = jog;
         }
 
+        var lastpos;
+
         function send_position() {
-            function formatNum(num) {
-                const padLength = 3;
-
-                let wholePart = String(Math.trunc(num)).padStart(padLength, ' ');
-                let decimalPart = num.toString().split('.')[1];
-                if (typeof(decimalPart) === undefined) {
-                    decimalPart = '000';
-                }
-                return wholePart + '.' + decimalPart;
-            }
-
             const stat = store.controller.state.status;
-            const pos = 'X ' + formatNum(stat.wpos.x) + 'Y ' + formatNum(stat.wpos.y) + 'Z ' + formatNum(stat.pos.z);
-            
-            let posVertical = '';
-            for (let i = 0; i < 9; i++) {
-                posVertical += pos[i] + pos[i + 9] + pos[i + 18];
-            }
-            // console.log('posVertical: ', posVertical);
 
-            const reportLength = 32;
-            const buffer = Buffer.alloc(reportLength + 1);
-            buffer.write(posVertical, 1, posVertical.length, 'utf8');
+            function formatNum(num, fullstring='') {
+                return new Promise((resolve) => {
+                    const padLength = 3;
 
-            console.log('Work Position:  X:' + stat.wpos.x + ' Y:' + stat.wpos.y + ' Z:' + stat.wpos.z);
+                    let wholePart = String(Math.trunc(num)).padStart(padLength, ' ');
+                    let decimalPart = num.toString().split('.')[1];
+                    if (typeof(decimalPart) === undefined) {
+                        decimalPart = '000';
+                    }  
+                
+                    resolve(fullstring + wholePart + '.' + decimalPart);
+            });
+        }
 
-            keyboard_main.write(buffer);
+            formatNum(stat.wpos.x, 'X ')
+                .then((res) => formatNum(stat.wpos.y, res + 'Y '))
+                .then((res) => formatNum(stat.wpos.z, res + 'Z '))
+                .then((res) => {
+                    const newpos = res;
 
-            console.log('Data sent to keyboard: ', buffer);
+                    if (lastpos === newpos) {
+                        return Promise.resolve();
+                    } else {
+                        lastpos = newpos;
+                    }
+
+                    let posVertical = '';
+                    for (let i = 0; i < 9; i++) {
+                        posVertical += newpos[i] + newpos[i + 9] + newpos[i + 18];
+                    }
+                    // console.log('posVertical: ', posVertical);
+
+                    const reportLength = 32;
+                    const buffer = Buffer.alloc(reportLength + 1);
+                    buffer.write(posVertical, 1, posVertical.length, 'utf8');
+
+                    console.log('Work Position:  X:' + stat.wpos.x + ' Y:' + stat.wpos.y + ' Z:' + stat.wpos.z);
+
+                    keyboard_main.write(buffer);
+
+                    // console.log('Data sent to keyboard: ', buffer);
+
+                    return Promise.resolve();
+                });
         }
 
         function sendToController() {
@@ -402,7 +418,7 @@ var createServer = function(options) {
             console.log("!!!!! key:"+kbdevent.key+" numlock:"+numlock);
 
             let val = kbdevent.key;
-            let fr = " F6000";
+            let fr = " F4500";
             switch (true) { // "true" allows conditions in switch statement
 
            /*
@@ -465,46 +481,38 @@ var createServer = function(options) {
                     break;
                 case val == 74: // Home Machine / "KC_HOME"
                     send_cmd('homing');
-                    send_position();
                     break;
                 case val == 95: // "KP_7" Z+ "B/W Arrow up"
                     send_gcode("G91 Z" + kbdevent.move + fr);
                     send_gcode("G90");
-                    send_position();
                     break;
                 case val == 92: // "KP_4" Z- "B/W Arrow down"
                     send_gcode("G91 Z-" + kbdevent.move + fr);
                     send_gcode("G90");
-                    send_position();
                     break;
                 case val == 91: // "KP_3" X+ arrow right
                     send_gcode("G91 X" + kbdevent.move + fr);
                     send_gcode("G90");
-                    send_position();
                     break;
                 case val == 89: // "KP_1" X- arrow left
                     send_gcode("G91 X-" + kbdevent.move + fr);
-                    send_gcode("G90");
-                    send_position();
-                    break;
+            	    send_gcode("G90");
+                   break;
                 case val == 93: // "KP_5" Y+ arrow up
                     send_gcode("G91 Y" + kbdevent.move + fr);
                     send_gcode("G90");
-                    send_position();
                     break;
                 case val == 90: // "KP_2" Y- arrow down
                     send_gcode("G91 Y-" + kbdevent.move + fr);
                     send_gcode("G90");
-                    send_position();
                     break;
                 case val == 94: // "KP_6" Move to X0Y0 / Set X0Y0 "Z"
                     if (!numlock) { // numlock off
-                        // send_gcode("G10 L20 P1 X0 Y0"); // set X0 and Y0 to present location
-                        send_gcode("G92 X0 Y0");
+                        send_gcode("G10 L20 P1 X0 Y0"); // set X0 and Y0 to present location
+                        // send_gcode("G92 X0 Y0");
                     } else { // numlock on -- powered on state
                         send_gcode("G92 Z0"); // set Z0 to present Z height
                     }
-                    send_position();
                     break;
                 case val == 85: // "KP_PAST" Unlock "U"
                     if (active_state('Alarm')) {
@@ -545,18 +553,8 @@ var createServer = function(options) {
                         console.log("Attempting to run the BitZero macro");
                         // run:macro args: id, context = {}, callback = noop
                         socket.emit('command', options.port, 'macro:run', '0c613845-cffa-46d5-b269-4c45fc016c6b', {});
-
-                        send_position();
                     }
                     break;
-                /*
-                case val == 60: // "KC_F3" Move 20
-                    kbdevent.default_move = 20;
-                    break;
-                case val == 61: // "KC_F4" Move 100
-                    kbdevent.default_move = 100;
-                    break;
-                */
                 case val == 88: // KP_Enter
                     if (store.key_repeats >= 3) {
                         if (!active_state('Run')) {

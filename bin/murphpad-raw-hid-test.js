@@ -39,31 +39,40 @@
 
         // Example: Sending data to the keyboard
         // The data length should match what your QMK firmware expects (e.g., 32 bytes)
-        function formatNum(num) {
-            const padLength = 3;
+        function formatNum(num, fullstring='') {
+            return new Promise((resolve) => {
+                const padLength = 3;
 
-            let wholePart = String(Math.trunc(num)).padStart(padLength, ' ');
-            let decimalPart = num.toString().split('.')[1];
-            if (typeof(decimalPart) === undefined) {
-                decimalPart = '000';
-            }
-            return wholePart + '.' + decimalPart;
+                let wholePart = String(Math.trunc(num)).padStart(padLength, ' ');
+                let decimalPart = num.toString().split('.')[1];
+                if (typeof(decimalPart) === undefined) {
+                    decimalPart = '000';
+                }  
+            
+                resolve(fullstring + wholePart + '.' + decimalPart);
+            });
         }
-
-        const pos = "X " + formatNum(222.124) + "Y " + formatNum(452.332) + "Z " + formatNum(55.002);
+        // const pos = "X " + formatNum(222.124) + "Y " + formatNum(452.332) + "Z " + formatNum(55.002);
         
-        console.log("pos: ", pos);
+        // console.log("pos: ", pos);
 
-        let posVertical = "";
-        for (let i = 0; i < 9; i++) {
-            posVertical += pos[i] + pos[i + 9] + pos[i + 18];
-        }
-        console.log("posVertical: ", posVertical);
+        // let posVertical = "";
+        // for (let i = 0; i < 9; i++) {
+        //     posVertical += pos[i] + pos[i + 9] + pos[i + 18];
+        // }
+        // console.log("posVertical: ", posVertical);
 
-        const dataToSend = Buffer.alloc(33);
-        dataToSend.write(posVertical, 1, posVertical.length, 'utf8');
-        device.write(dataToSend);
-        console.log('Sent data to keyboard:', dataToSend);
+        // const dataToSend = Buffer.alloc(33);
+        // dataToSend.write(posVertical, 1, posVertical.length, 'utf8');
+        // device.write(dataToSend);
+        // console.log('Sent data to keyboard:', dataToSend);
+
+        formatNum(222.124, '')
+            .then((result) => formatNum(452.332, result))
+            .then((result) => formatNum(55.002, result))
+            .then((result) => console.log(result));
+
+        // console.log("pos: ", pos);
     
     } catch (error) {
         console.error('Error connecting to HID device:', error);
