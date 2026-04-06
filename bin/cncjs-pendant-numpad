@@ -515,7 +515,11 @@ var createServer = function(options) {
                     }
                     break;
                 case val == 85: // "KP_PAST" Unlock "U"
+                    console.log('U key pressed.  Active state is ' + store.controller.state.status.activeState);
                     if (active_state('Alarm')) {
+                        console.log('Sending $X');
+			            send_gcode('$X');
+                        console.log('Sending reset')
                         send_cmd('reset');
                     }
                     else {
@@ -553,6 +557,13 @@ var createServer = function(options) {
                         console.log("Attempting to run the BitZero macro");
                         // run:macro args: id, context = {}, callback = noop
                         socket.emit('command', options.port, 'macro:run', '0c613845-cffa-46d5-b269-4c45fc016c6b', {});
+                    }
+                    break;
+                case val == 61: // KC_F4 : Budget Probe Z Only
+                    if (!active_state('Run')) {
+                        console.log("Attempting to run the Budget Probe Z Only macro");
+                        // run:macro args: id, context = {}, callback = noop
+                        socket.emit('command', options.port, 'macro:run', '0fd7ddf1-2942-4399-8edd-1760ebbda888', {});
                     }
                     break;
                 case val == 88: // KP_Enter
